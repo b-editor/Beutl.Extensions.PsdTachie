@@ -8,6 +8,7 @@
         <Version>0.1.0</Version>
         <AssemblyVersion>0.1.0.0</AssemblyVersion>
         <Authors>Yuto Terada</Authors>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <BeutlAutoReferenceSourceGenerators>false</BeutlAutoReferenceSourceGenerators>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>

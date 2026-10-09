@@ -70,3 +70,7 @@ Beutlにサイドロードして試す場合は、次のコマンドで `~/.beut
 ```bash
 dotnet build src/Beutl.Extensions.PsdTachie -p:DebugApplication=true
 ```
+
+## ライセンス
+
+[MIT License](LICENSE)

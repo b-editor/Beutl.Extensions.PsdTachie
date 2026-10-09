@@ -1,0 +1,6 @@
+<Project>
+    <PropertyGroup>
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableAotAnalyzer>false</EnableAotAnalyzer>
+    </PropertyGroup>
+</Project>

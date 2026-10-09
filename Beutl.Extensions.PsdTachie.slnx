@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Root/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="nuget.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="src/Beutl.Extensions.PsdTachie/Beutl.Extensions.PsdTachie.csproj" />
+  <Project Path="tests/Beutl.Extensions.PsdTachie.Tests/Beutl.Extensions.PsdTachie.Tests.csproj" />
+</Solution>

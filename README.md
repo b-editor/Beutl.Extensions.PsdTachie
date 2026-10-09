@@ -1,5 +1,7 @@
 # Beutl.Extensions.PsdTachie
 
+<img src="assets/icon.png" width="96" height="96" alt="">
+
 PSDファイルを立ち絵として表示するBeutlの拡張機能です。レイヤーの表示を切り替えられ、音声に合わせた口パクと自動の目パチができます。
 
 ## 使い方

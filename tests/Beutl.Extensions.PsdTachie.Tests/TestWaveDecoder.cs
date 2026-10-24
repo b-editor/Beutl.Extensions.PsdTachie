@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using Beutl.Audio;
 using Beutl.Media;
 using Beutl.Media.Decoding;
-using Beutl.Media.Music;
 using Beutl.Media.Source;
 using NAudio.Wave;
 
@@ -31,10 +31,9 @@ internal sealed class TestWaveDecoder : IDecoderInfo
 
     public IEnumerable<string> AudioExtensions() => [".wav"];
 
-    /// <summary>Writes a mono 16-bit WAV file from samples in [-1, 1].</summary>
-    public static void Write(string path, int sampleRate, IEnumerable<float> samples)
+    public static void Write(string path, int sampleRate, IEnumerable<float> samples, int channels = 1)
     {
-        using var writer = new WaveFileWriter(path, new WaveFormat(sampleRate, 16, 1));
+        using var writer = new WaveFileWriter(path, new WaveFormat(sampleRate, 16, channels));
         foreach (float sample in samples)
             writer.WriteSample(sample);
     }
@@ -42,13 +41,12 @@ internal sealed class TestWaveDecoder : IDecoderInfo
     private sealed class Reader : MediaReader
     {
         private readonly WaveFileReader _reader;
-        private readonly ISampleProvider _stereo;
+        private readonly ISampleProvider _samples;
 
         public Reader(string file)
         {
             _reader = new WaveFileReader(file);
-            ISampleProvider samples = _reader.ToSampleProvider();
-            _stereo = samples.WaveFormat.Channels == 1 ? samples.ToStereo() : samples;
+            _samples = _reader.ToSampleProvider();
             AudioInfo = new AudioStreamInfo(
                 "pcm",
                 new Rational(_reader.SampleCount, _reader.WaveFormat.SampleRate),
@@ -70,10 +68,19 @@ internal sealed class TestWaveDecoder : IDecoderInfo
             return false;
         }
 
-        public override bool ReadAudio(int start, int length, [NotNullWhen(true)] out Ref<IPcm>? sound)
+        public override bool ReadAudio(int start, int length, [NotNullWhen(true)] out AudioBuffer? sound)
         {
             _reader.Position = Math.Min(_reader.Length, (long)start * _reader.WaveFormat.BlockAlign);
-            sound = SampleProviderReader.ReadStereo(_stereo, _reader.WaveFormat.SampleRate, length);
+            int channels = _samples.WaveFormat.Channels;
+            var interleaved = new float[length * channels];
+            int frames = _samples.Read(interleaved.AsSpan()) / channels;
+            sound = new AudioBuffer(_reader.WaveFormat.SampleRate, channels, frames);
+            for (int channel = 0; channel < channels; channel++)
+            {
+                Span<float> data = sound.GetChannelData(channel);
+                for (int i = 0; i < frames; i++)
+                    data[i] = interleaved[i * channels + channel];
+            }
             return true;
         }
 

@@ -1,5 +1,4 @@
-using Beutl.Media.Music;
-using Beutl.Media.Music.Samples;
+using Beutl.Audio;
 using Beutl.Media.Source;
 
 namespace Beutl.Extensions.PsdTachie.Animation;
@@ -43,13 +42,13 @@ internal sealed class LoudnessEnvelope
     public SoundSource.Resource Source { get; }
 
     /// <summary>The loudest bin within <paramref name="hold"/> before <paramref name="time"/>, in dBFS.</summary>
-    public double GetLevel(TimeSpan time, TimeSpan hold)
+    public double GetLevel(MediaTime time, MediaTime hold)
     {
-        if (time < TimeSpan.Zero || time > Source.Duration)
+        if (time < MediaTime.Zero || time > Source.Duration)
             return double.NegativeInfinity;
 
-        long last = (long)Math.Floor(time.TotalSeconds * BinsPerSecond);
-        long first = Math.Max(0, last - (long)Math.Ceiling(hold.TotalSeconds * BinsPerSecond));
+        long last = time.ToSamples(BinsPerSecond, MidpointRounding.ToNegativeInfinity);
+        long first = Math.Max(0, last - hold.ToSamples(BinsPerSecond, MidpointRounding.ToPositiveInfinity));
         double peak = double.NegativeInfinity;
         for (long bin = first; bin <= last; bin++)
         {
@@ -75,30 +74,30 @@ internal sealed class LoudnessEnvelope
     {
         var values = new float[BinsPerSecond];
         values.AsSpan().Fill(float.NegativeInfinity);
-        if (!Source.Read(TimeSpan.FromSeconds(block), TimeSpan.FromSeconds(1), out Ref<IPcm>? pcmRef))
+        if (!Source.Read(MediaTime.FromSeconds(block), MediaTime.FromSeconds(1), out AudioBuffer? audio))
             return values;
 
-        using (pcmRef)
+        using (audio)
         {
-            IPcm pcm = pcmRef.Value;
-            using Pcm<Stereo32BitFloat> stereo = pcm.Convert<Stereo32BitFloat>();
-            Span<Stereo32BitFloat> samples = stereo.DataSpan;
-            int samplesPerBin = Math.Max(1, stereo.SampleRate / BinsPerSecond);
+            int samplesPerBin = Math.Max(1, audio.SampleRate / BinsPerSecond);
             for (int i = 0; i < BinsPerSecond; i++)
             {
                 int start = i * samplesPerBin;
-                if (start >= samples.Length)
+                if (start >= audio.SampleCount)
                     break;
 
-                int end = Math.Min(samples.Length, start + samplesPerBin);
+                int end = Math.Min(audio.SampleCount, start + samplesPerBin);
                 double sum = 0;
-                for (int s = start; s < end; s++)
+                for (int channel = 0; channel < audio.ChannelCount; channel++)
                 {
-                    Stereo32BitFloat sample = samples[s];
-                    sum += (sample.Left * (double)sample.Left + sample.Right * (double)sample.Right) / 2;
+                    Span<float> samples = audio.GetChannelData(channel);
+                    for (int s = start; s < end; s++)
+                    {
+                        sum += samples[s] * (double)samples[s];
+                    }
                 }
 
-                values[i] = (float)LipSync.ToDecibels(Math.Sqrt(sum / (end - start)));
+                values[i] = (float)LipSync.ToDecibels(Math.Sqrt(sum / ((end - start) * (double)audio.ChannelCount)));
             }
         }
 

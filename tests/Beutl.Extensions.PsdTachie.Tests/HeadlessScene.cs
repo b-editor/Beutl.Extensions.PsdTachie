@@ -22,13 +22,13 @@ internal static class HeadlessScene
             Assert.Ignore("No graphics context is available on this host.");
     }
 
-    public static Scene Create(params (EngineObject Object, TimeSpan Length)[] objects)
+    public static Scene Create(params (EngineObject Object, MediaTime Length)[] objects)
     {
         var scene = new Scene(1920, 1080, "HeadlessScene");
         int layer = 0;
-        foreach ((EngineObject obj, TimeSpan length) in objects)
+        foreach ((EngineObject obj, MediaTime length) in objects)
         {
-            var element = new Element { Start = TimeSpan.Zero, Length = length, ZIndex = layer++ };
+            var element = new Element { Start = { Value = MediaTime.Zero }, Length = { Value = length }, ZIndex = { Value = layer++ } };
             element.AddObject(obj);
             scene.AddChild(element);
         }
@@ -37,7 +37,7 @@ internal static class HeadlessScene
     }
 
     /// <summary>Renders one frame and returns it as 8-bit sRGB BGRA.</summary>
-    public static Bitmap Render(Scene scene, TimeSpan time)
+    public static Bitmap Render(Scene scene, MediaTime time)
     {
         EnsureAvailable();
         return RenderThread.Dispatcher.Invoke(() =>
@@ -66,17 +66,16 @@ internal static class HeadlessScene
         TestContext.AddTestAttachment(path);
     }
 
-    /// <summary>
-    /// Splits the element at <paramref name="at"/> with Beutl's own split, as the timeline's split command does, and
-    /// returns the back half. The split stores the back half next to the scene file, so the scene gets one first.
-    /// </summary>
-    public static Element Split(Scene scene, Element element, TimeSpan at)
+    // Splits through Beutl's timeline service and returns the newly added back half.
+    public static Element Split(Scene scene, Element element, MediaTime at)
     {
         string directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"split-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         scene.Uri = new Uri(Path.Combine(directory, "split.scene"));
-        using var history = new HistoryManager(scene, new OperationSequenceGenerator());
-        return new ElementStructureService(history).Split(scene, [element], at).NewElements.Single();
+        using var history = new HistoryManager(new OperationSequenceGenerator());
+        var existing = scene.Children.ToHashSet();
+        new ElementStructureService(history).Split(scene, [element], at);
+        return scene.Children.Single(child => !existing.Contains(child));
     }
 
     /// <summary>Asserts that two frames are identical, pixel for pixel, and that they show something.</summary>

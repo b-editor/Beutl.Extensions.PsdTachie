@@ -21,14 +21,14 @@ public class OriginalDurationTests
     public void FollowsTheLipSyncAudioAndItsOffset()
     {
         var drawable = new PsdTachieDrawable();
-        drawable.LipSyncAudio.CurrentValue = WriteSilence(2);
-        drawable.LipSyncOffset.CurrentValue = TimeSpan.FromSeconds(0.5);
-        var element = new Element { Length = TimeSpan.FromSeconds(10) };
+        drawable.LipSyncAudio.Value = WriteSilence(2);
+        drawable.LipSyncOffset.Value = MediaTime.FromSeconds(0.5);
+        var element = new Element { Length = { Value = MediaTime.FromSeconds(10) } };
         element.AddObject(drawable);
 
         Assert.That(element.HasOriginalDuration(), Is.True);
-        Assert.That(element.TryGetOriginalDuration(out TimeSpan duration), Is.True);
-        Assert.That(duration, Is.EqualTo(TimeSpan.FromSeconds(2.5)).Within(TimeSpan.FromMilliseconds(1)));
+        Assert.That(element.TryGetOriginalDuration(out MediaTime duration), Is.True);
+        Assert.That(duration, Is.EqualTo(MediaTime.FromSeconds(2.5)));
     }
 
     [Test]

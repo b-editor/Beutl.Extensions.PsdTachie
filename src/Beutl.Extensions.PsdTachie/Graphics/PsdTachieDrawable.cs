@@ -26,79 +26,79 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
     }
 
     [Display(Name = "PSDファイル")]
-    public IProperty<FileInfo?> Source { get; } = Property.Create<FileInfo?>();
+    public IExpressionProperty<FileInfo?> Source { get; } = Property.CreateExpression<FileInfo?>();
 
     [PsdLayerState]
     [Display(Name = "レイヤー")]
-    public IProperty<string> Layers { get; } = Property.Create("");
+    public IExpressionProperty<string> Layers { get; } = Property.CreateExpression("");
 
     [Display(Name = "口パクの音声", Description = "この音声の音量に合わせて口のレイヤーを切り替えます")]
-    public IProperty<SoundSource?> LipSyncAudio { get; } = Property.Create<SoundSource?>();
+    public IExpressionProperty<SoundSource?> LipSyncAudio { get; } = Property.CreateExpression<SoundSource?>();
 
     [Display(Name = "音声の開始位置", Description = "オブジェクトの先頭から音声が始まるまでの時間")]
-    public IProperty<TimeSpan> LipSyncOffset { get; } = Property.Create(TimeSpan.Zero);
+    public IExpressionProperty<MediaTime> LipSyncOffset { get; } = Property.CreateExpression(MediaTime.Zero);
 
     [Display(Name = "閉じた口")]
-    public IProperty<string> MouthClosed { get; } = Property.Create("");
+    public IExpressionProperty<string> MouthClosed { get; } = Property.CreateExpression("");
 
     [Display(Name = "半開きの口")]
-    public IProperty<string> MouthHalfOpen { get; } = Property.Create("");
+    public IExpressionProperty<string> MouthHalfOpen { get; } = Property.CreateExpression("");
 
     [Display(Name = "開いた口")]
-    public IProperty<string> MouthOpen { get; } = Property.Create("");
+    public IExpressionProperty<string> MouthOpen { get; } = Property.CreateExpression("");
 
     [Range(-96f, 0f)]
     [Display(Name = "半開きにする音量 (dB)")]
-    public IProperty<float> HalfOpenThreshold { get; } = Property.CreateAnimatable(-36f);
+    public IExpressionProperty<float> HalfOpenThreshold { get; } = Property.CreateAnimatable(-36f);
 
     [Range(-96f, 0f)]
     [Display(Name = "開く音量 (dB)")]
-    public IProperty<float> OpenThreshold { get; } = Property.CreateAnimatable(-24f);
+    public IExpressionProperty<float> OpenThreshold { get; } = Property.CreateAnimatable(-24f);
 
     [Display(Name = "開いた目")]
-    public IProperty<string> EyeOpen { get; } = Property.Create("");
+    public IExpressionProperty<string> EyeOpen { get; } = Property.CreateExpression("");
 
     [Display(Name = "半目")]
-    public IProperty<string> EyeHalfOpen { get; } = Property.Create("");
+    public IExpressionProperty<string> EyeHalfOpen { get; } = Property.CreateExpression("");
 
     [Display(Name = "閉じた目")]
-    public IProperty<string> EyeClosed { get; } = Property.Create("");
+    public IExpressionProperty<string> EyeClosed { get; } = Property.CreateExpression("");
 
     [Range(0.1f, 60f)]
     [Display(Name = "まばたきの間隔 (秒)")]
-    public IProperty<float> BlinkInterval { get; } = Property.Create(4f);
+    public IExpressionProperty<float> BlinkInterval { get; } = Property.CreateExpression(4f);
 
     [Range(0f, 100f)]
     [Display(Name = "間隔のばらつき (%)")]
-    public IProperty<float> BlinkRandomness { get; } = Property.Create(50f);
+    public IExpressionProperty<float> BlinkRandomness { get; } = Property.CreateExpression(50f);
 
     [Range(0.01f, 2f)]
     [Display(Name = "まばたきの長さ (秒)")]
-    public IProperty<float> BlinkDuration { get; } = Property.Create(0.15f);
+    public IExpressionProperty<float> BlinkDuration { get; } = Property.CreateExpression(0.15f);
 
     [Display(Name = "まばたきの乱数シード")]
-    public IProperty<int> BlinkSeed { get; } = Property.Create(0);
+    public IExpressionProperty<int> BlinkSeed { get; } = Property.CreateExpression(0);
 
     public bool HasOriginalDuration()
     {
-        return LipSyncAudio.CurrentValue != null;
+        return LipSyncAudio.Value != null;
     }
 
-    public bool TryGetOriginalDuration(out TimeSpan timeSpan)
+    public bool TryGetOriginalDuration(out MediaTime timeSpan)
     {
-        using SoundSource.Resource? audio = LipSyncAudio.CurrentValue?.ToResource(CompositionContext.Default);
-        timeSpan = audio != null ? LipSyncOffset.CurrentValue + audio.Duration : TimeSpan.Zero;
-        return audio is { Duration.Ticks: > 0 } && timeSpan > TimeSpan.Zero;
+        using SoundSource.Resource? audio = LipSyncAudio.Value?.ToResource(CompositionContext.Default);
+        timeSpan = audio != null ? LipSyncOffset.Value + audio.Duration : MediaTime.Zero;
+        return audio is { Duration.Flicks: > 0 } && timeSpan > MediaTime.Zero;
     }
 
     /// <summary>
     /// Keeps the mouth on the voice when the element is split: the back half starts later, so its voice starts earlier
     /// by as much, as a split sound does. Blinks start over in the back half, with the eyes open.
     /// </summary>
-    public void NotifySplitted(bool backward, TimeSpan startDelta, TimeSpan durationDelta)
+    public void NotifySplitted(bool backward, MediaTime startDelta, MediaTime durationDelta)
     {
         if (backward)
-            LipSyncOffset.CurrentValue -= startDelta;
+            LipSyncOffset.Value -= startDelta;
     }
 
     protected override Size MeasureCore(Size availableSize, Drawable.Resource resource)
@@ -124,7 +124,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
     public partial class Resource
     {
         // A short hold keeps the mouth from flickering between syllables.
-        private static readonly TimeSpan s_levelHold = TimeSpan.FromMilliseconds(40);
+        private static readonly MediaTime s_levelHold = MediaTime.FromSeconds(0.04);
 
         private readonly PsdFrameCache _frames = new();
         private LoudnessEnvelope? _envelope;
@@ -137,7 +137,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
 
         internal LoadedPsd? Loaded { get; private set; }
 
-        partial void PostUpdate(PsdTachieDrawable obj, CompositionContext context)
+        partial void PostReconcile(PsdTachieDrawable obj, CompositionContext context)
         {
             UpdateDocument();
             LoadedPsd? loaded = Loaded;
@@ -151,7 +151,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             Bitmap? frame = null;
             if (loaded != null)
             {
-                TimeSpan localTime = context.Time - obj.TimeRange.Start;
+                MediaTime localTime = context.Time - obj.TimeRange.Value.Start;
                 Dictionary<PsdLayer, bool> choices = ChooseShapes(loaded.Document, localTime);
                 bool[] flags = PsdLayerState.Resolve(loaded.Document, Layers, choices);
                 key = PsdLayerState.CreateCacheKey(flags);
@@ -213,7 +213,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             }
         }
 
-        private Dictionary<PsdLayer, bool> ChooseShapes(PsdDocument document, TimeSpan localTime)
+        private Dictionary<PsdLayer, bool> ChooseShapes(PsdDocument document, MediaTime localTime)
         {
             var choices = new Dictionary<PsdLayer, bool>();
 
@@ -238,7 +238,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             if (eyeOpen != null || eyeHalf != null || eyeClosed != null)
             {
                 EyeShape shape = BlinkSchedule.GetShape(
-                    localTime,
+                    localTime.ToTimeSpan(),
                     TimeSpan.FromSeconds(BlinkInterval),
                     BlinkRandomness / 100.0,
                     TimeSpan.FromSeconds(BlinkDuration),
@@ -255,7 +255,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             return choices;
         }
 
-        private double MeasureLevel(TimeSpan audioTime)
+        private double MeasureLevel(MediaTime audioTime)
         {
             SoundSource.Resource? audio = LipSyncAudio;
             if (audio == null)

@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -26,7 +28,7 @@ public class PropertyEditorTests
     private static PsdTachieDrawable CreateDrawable()
     {
         var drawable = new PsdTachieDrawable();
-        drawable.Source.CurrentValue = new FileInfo(TestData("tachie_rle.psd"));
+        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
         return drawable;
     }
 
@@ -46,11 +48,10 @@ public class PropertyEditorTests
     [Test]
     public void ExtensionClaimsOnlyTheLayerTree()
     {
-        var extension = new PsdPropertyEditorExtension();
         List<IPropertyAdapter> adapters = Adapters(CreateDrawable());
 
         string[] claimed = adapters
-            .Where(a => extension.MatchProperty([a]).Any())
+            .Where(a => PsdPropertyEditorExtension.GetKind(a) == PsdEditorKind.LayerState)
             .Select(a => a.GetEngineProperty()!.Name)
             .ToArray();
 
@@ -80,9 +81,36 @@ public class PropertyEditorTests
         var extension = new PsdPropertyEditorExtension();
         IPropertyAdapter layers = Adapters(CreateDrawable()).Single(a => a.GetEngineProperty()!.Name == nameof(PsdTachieDrawable.Layers));
 
-        Assert.That(extension.TryCreateContext([layers], out IPropertyEditorContext? context), Is.True);
-        Assert.That(extension.TryCreateControl(context!, out Control? control), Is.True);
+        object registry = typeof(PropertyEditorExtension).GetProperty("Registry", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(extension)!;
+        object registration = ((IEnumerable)registry.GetType().GetProperty("Registrations", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(registry)!).Cast<object>().Single();
+        var createContext = (Func<IReadOnlyList<IPropertyAdapter>, IPropertyEditorContext?>)registration.GetType()
+            .GetProperty("CreateContext")!.GetValue(registration)!;
+        using IPropertyEditorContext? context = createContext([layers]);
+        var createControl = (Delegate)registration.GetType().GetProperty("CreateControl")!.GetValue(registration)!;
+        object panel = Enum.Parse(createControl.GetType().GenericTypeArguments[1], "Panel");
+        var control = (Control?)createControl.DynamicInvoke(context, panel);
         Assert.That(control, Is.TypeOf<PsdLayerTreeEditor>());
+        Assert.That(createControl.DynamicInvoke(context, panel), Is.Not.SameAs(control));
+
+        Show(control!);
+        foreach (TreeViewItem item in control!.GetVisualDescendants().OfType<TreeViewItem>().ToList())
+            item.IsExpanded = true;
+        var window = (Window)TopLevel.GetTopLevel(control)!;
+        foreach (int width in new[] { 280, 400 })
+        {
+            window.Width = width;
+            Dispatcher.UIThread.RunJobs();
+            using var frame = window.CaptureRenderedFrame();
+            Assert.That(frame, Is.Not.Null);
+            string directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "rendered");
+            Directory.CreateDirectory(directory);
+            string path = Path.Combine(directory, $"psd-editor-{width}.png");
+            frame!.Save(path, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+            TestContext.AddTestAttachment(path);
+        }
+        window.Close();
     }
 
     [AvaloniaTest]
@@ -97,7 +125,7 @@ public class PropertyEditorTests
         Assert.That(hidden.IsChecked, Is.False);
         hidden.IsChecked = true;
         Dispatcher.UIThread.RunJobs();
-        Assert.That(drawable.Layers.CurrentValue, Is.EqualTo("+非表示"));
+        Assert.That(drawable.Layers.Value, Is.EqualTo("+非表示"));
 
         // A forced '!' layer cannot be switched off.
         Assert.That(FindToggle<CheckBox>(editor, "📁 体").IsEnabled, Is.True);
@@ -112,7 +140,7 @@ public class PropertyEditorTests
         closed.IsChecked = true;
         Dispatcher.UIThread.RunJobs();
 
-        Assert.That(drawable.Layers.CurrentValue.Split('\n'), Is.EquivalentTo(new[] { "+非表示", "-目/*開き", "+目/*閉じ" }));
+        Assert.That(drawable.Layers.Value.Split('\n'), Is.EquivalentTo(new[] { "+非表示", "-目/*開き", "+目/*閉じ" }));
         Assert.That(FindToggle<RadioButton>(eyes, "開き").IsChecked, Is.False);
 
         // Changing the value from outside (undo, for example) updates the check boxes.
@@ -226,7 +254,7 @@ public class PropertyEditorTests
         Assert.That(ShapeBox(open).Bounds.Left, Is.GreaterThan(open.GetVisualDescendants().OfType<ToggleButton>().First().Bounds.Right));
 
         Choose(open, "開いた口");
-        Assert.That(drawable.MouthOpen.CurrentValue, Is.EqualTo("口/*開き"));
+        Assert.That(drawable.MouthOpen.Value, Is.EqualTo("口/*開き"));
 
         // An assigned layer keeps showing its shape when the pointer moves on.
         Hover(half);
@@ -235,7 +263,7 @@ public class PropertyEditorTests
 
         Hover(open);
         Choose(open, "（なし）");
-        Assert.That(drawable.MouthOpen.CurrentValue, Is.EqualTo(""));
+        Assert.That(drawable.MouthOpen.Value, Is.EqualTo(""));
         Assert.That(Shown(open), Is.EqualTo("割り当て"));
         Hover(half);
         Assert.That(Shown(open), Is.Null);
@@ -249,8 +277,8 @@ public class PropertyEditorTests
     public void ShapeBoxesLineUpAtTheRightWhateverTheDepth()
     {
         PsdTachieDrawable drawable = CreateDrawable();
-        drawable.MouthOpen.CurrentValue = "口/*開き";
-        drawable.EyeOpen.CurrentValue = "非表示";
+        drawable.MouthOpen.Value = "口/*開き";
+        drawable.EyeOpen.Value = "非表示";
         PsdLayerTreeEditor editor = ShowTree(drawable);
         TreeView tree = editor.GetVisualDescendants().OfType<TreeView>().Single();
 
@@ -273,19 +301,19 @@ public class PropertyEditorTests
 
         Choose(open, "開いた口");
         Choose(half, "開いた口");
-        Assert.That(drawable.MouthOpen.CurrentValue, Is.EqualTo("口/*半開き"));
+        Assert.That(drawable.MouthOpen.Value, Is.EqualTo("口/*半開き"));
         Assert.That(ShapeBox(open).SelectedIndex, Is.EqualTo(-1), "The layer that had the shape loses it.");
 
         Choose(half, "半開きの口");
-        Assert.That(drawable.MouthOpen.CurrentValue, Is.EqualTo(""));
-        Assert.That(drawable.MouthHalfOpen.CurrentValue, Is.EqualTo("口/*半開き"));
+        Assert.That(drawable.MouthOpen.Value, Is.EqualTo(""));
+        Assert.That(drawable.MouthHalfOpen.Value, Is.EqualTo("口/*半開き"));
     }
 
     [AvaloniaTest]
     public void ShapeBoxesFollowAssignmentsMadeElsewhere()
     {
         PsdTachieDrawable drawable = CreateDrawable();
-        drawable.EyeOpen.CurrentValue = "目/*開き";
+        drawable.EyeOpen.Value = "目/*開き";
         PsdLayerTreeEditor editor = ShowTree(drawable);
         DockPanel open = LayerRow(editor, "📁 目", "開き");
         DockPanel closed = LayerRow(editor, "📁 目", "閉じ");
@@ -293,8 +321,8 @@ public class PropertyEditorTests
         Assert.That(Shown(closed), Is.Null);
 
         // Undo and redo change the same properties.
-        drawable.EyeClosed.CurrentValue = "目/*閉じ";
-        drawable.EyeOpen.CurrentValue = "";
+        drawable.EyeClosed.Value = "目/*閉じ";
+        drawable.EyeOpen.Value = "";
         Dispatcher.UIThread.RunJobs();
 
         Assert.That(Shown(open), Is.Null);
@@ -305,22 +333,25 @@ public class PropertyEditorTests
     public void MovingALayerToAnotherShapeIsOneUndoableEdit()
     {
         PsdTachieDrawable drawable = CreateDrawable();
-        drawable.MouthOpen.CurrentValue = "口/*閉じ";
+        drawable.MouthOpen.Value = "口/*閉じ";
         var scene = new Scene(1920, 1080, "Undo");
-        var element = new Element { Length = TimeSpan.FromSeconds(5) };
+        var element = new Element { Length = { Value = MediaTime.FromSeconds(5) } };
         element.AddObject(drawable);
         scene.AddChild(element);
         var sequence = new OperationSequenceGenerator();
         using var observer = new CoreObjectOperationObserver(null, scene, sequence);
-        using var history = new HistoryManager(scene, sequence);
+        using var history = new HistoryManager(sequence);
         using IDisposable subscription = history.Subscribe(observer);
 
         PsdLayerTreeEditor editor = ShowTree(drawable, new HistoryVisitor(history));
         Choose(LayerRow(editor, "📁 口", "閉じ"), "閉じた口");
-        Assert.That((drawable.MouthClosed.CurrentValue, drawable.MouthOpen.CurrentValue), Is.EqualTo(("口/*閉じ", "")));
+        Assert.That((drawable.MouthClosed.Value, drawable.MouthOpen.Value), Is.EqualTo(("口/*閉じ", "")));
 
         Assert.That(history.Undo(), Is.True);
-        Assert.That((drawable.MouthClosed.CurrentValue, drawable.MouthOpen.CurrentValue), Is.EqualTo(("", "口/*閉じ")));
+        Assert.That((drawable.MouthClosed.Value, drawable.MouthOpen.Value), Is.EqualTo(("", "口/*閉じ")));
+
+        Assert.That(history.Redo(), Is.True);
+        Assert.That((drawable.MouthClosed.Value, drawable.MouthOpen.Value), Is.EqualTo(("口/*閉じ", "")));
     }
 
     private sealed class HistoryVisitor(HistoryManager history) : IPropertyEditorContextVisitor, IServiceProvider

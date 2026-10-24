@@ -23,16 +23,16 @@ public class PsdTachieRenderTests
     private static PsdTachieDrawable CreateDrawable()
     {
         var drawable = new PsdTachieDrawable();
-        drawable.Source.CurrentValue = new FileInfo(TestData("tachie_rle.psd"));
-        drawable.MouthClosed.CurrentValue = "口/*閉じ";
-        drawable.MouthHalfOpen.CurrentValue = "口/*半開き";
-        drawable.MouthOpen.CurrentValue = "口/*開き";
-        drawable.EyeOpen.CurrentValue = "目/*開き";
-        drawable.EyeHalfOpen.CurrentValue = "目/*半目";
-        drawable.EyeClosed.CurrentValue = "目/*閉じ";
-        drawable.BlinkInterval.CurrentValue = 1f;
-        drawable.BlinkRandomness.CurrentValue = 0f;
-        drawable.BlinkDuration.CurrentValue = 0.3f;
+        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
+        drawable.MouthClosed.Value = "口/*閉じ";
+        drawable.MouthHalfOpen.Value = "口/*半開き";
+        drawable.MouthOpen.Value = "口/*開き";
+        drawable.EyeOpen.Value = "目/*開き";
+        drawable.EyeHalfOpen.Value = "目/*半目";
+        drawable.EyeClosed.Value = "目/*閉じ";
+        drawable.BlinkInterval.Value = 1f;
+        drawable.BlinkRandomness.Value = 0f;
+        drawable.BlinkDuration.Value = 0.3f;
         return drawable;
     }
 
@@ -42,9 +42,9 @@ public class PsdTachieRenderTests
     [Test]
     public void RendersCompositedLayersAtTheirPsdPositions()
     {
-        Scene scene = HeadlessScene.Create((CreateDrawable(), TimeSpan.FromSeconds(5)));
+        Scene scene = HeadlessScene.Create((CreateDrawable(), MediaTime.FromSeconds(5)));
 
-        using Bitmap frame = HeadlessScene.Render(scene, TimeSpan.FromSeconds(0.5));
+        using Bitmap frame = HeadlessScene.Render(scene, MediaTime.FromSeconds(0.5));
         HeadlessScene.SaveForInspection(frame, "psd-default.png");
 
         HeadlessScene.AssertColor(PsdPixel(frame, 1, 1), s_background);
@@ -60,10 +60,10 @@ public class PsdTachieRenderTests
     [Test]
     public void EyesBlinkOnTheConfiguredInterval()
     {
-        Scene scene = HeadlessScene.Create((CreateDrawable(), TimeSpan.FromSeconds(5)));
+        Scene scene = HeadlessScene.Create((CreateDrawable(), MediaTime.FromSeconds(5)));
 
-        using Bitmap open = HeadlessScene.Render(scene, TimeSpan.FromSeconds(0.5));
-        using Bitmap closed = HeadlessScene.Render(scene, TimeSpan.FromSeconds(1.15));
+        using Bitmap open = HeadlessScene.Render(scene, MediaTime.FromSeconds(0.5));
+        using Bitmap closed = HeadlessScene.Render(scene, MediaTime.FromSeconds(1.15));
         HeadlessScene.SaveForInspection(closed, "psd-blink.png");
 
         // The open eye covers rows 4-7; the closed eye is the single row 6.
@@ -84,16 +84,16 @@ public class PsdTachieRenderTests
             .Select(i => i < rate ? 0.5f * MathF.Sin(2 * MathF.PI * 220 * i / rate) : 0f));
 
         PsdTachieDrawable drawable = CreateDrawable();
-        drawable.EyeOpen.CurrentValue = "";
-        drawable.EyeHalfOpen.CurrentValue = "";
-        drawable.EyeClosed.CurrentValue = "";
+        drawable.EyeOpen.Value = "";
+        drawable.EyeHalfOpen.Value = "";
+        drawable.EyeClosed.Value = "";
         var audio = new SoundSource();
         audio.ReadFrom(new Uri(wav));
-        drawable.LipSyncAudio.CurrentValue = audio;
-        Scene scene = HeadlessScene.Create((drawable, TimeSpan.FromSeconds(5)));
+        drawable.LipSyncAudio.Value = audio;
+        Scene scene = HeadlessScene.Create((drawable, MediaTime.FromSeconds(5)));
 
-        using Bitmap speaking = HeadlessScene.Render(scene, TimeSpan.FromSeconds(0.5));
-        using Bitmap silent = HeadlessScene.Render(scene, TimeSpan.FromSeconds(1.5));
+        using Bitmap speaking = HeadlessScene.Render(scene, MediaTime.FromSeconds(0.5));
+        using Bitmap silent = HeadlessScene.Render(scene, MediaTime.FromSeconds(1.5));
         HeadlessScene.SaveForInspection(speaking, "psd-lipsync-open.png");
 
         // The open mouth covers rows 12-16; the closed one is the single row 14.
@@ -107,13 +107,13 @@ public class PsdTachieRenderTests
     public void StoredLayerStateHidesAndShowsLayers()
     {
         PsdTachieDrawable drawable = CreateDrawable();
-        drawable.MouthClosed.CurrentValue = "";
-        drawable.MouthHalfOpen.CurrentValue = "";
-        drawable.MouthOpen.CurrentValue = "";
-        drawable.Layers.CurrentValue = "-体\n+非表示";
-        Scene scene = HeadlessScene.Create((drawable, TimeSpan.FromSeconds(5)));
+        drawable.MouthClosed.Value = "";
+        drawable.MouthHalfOpen.Value = "";
+        drawable.MouthOpen.Value = "";
+        drawable.Layers.Value = "-体\n+非表示";
+        Scene scene = HeadlessScene.Create((drawable, MediaTime.FromSeconds(5)));
 
-        using Bitmap frame = HeadlessScene.Render(scene, TimeSpan.FromSeconds(0.5));
+        using Bitmap frame = HeadlessScene.Render(scene, MediaTime.FromSeconds(0.5));
 
         HeadlessScene.AssertColor(PsdPixel(frame, 20, 25), s_background);
         HeadlessScene.AssertColor(PsdPixel(frame, 52, 32), (255, 255, 0));
@@ -122,16 +122,16 @@ public class PsdTachieRenderTests
     [Test]
     public void SurvivesSerializationRoundTrip()
     {
-        var element = new Element { Length = TimeSpan.FromSeconds(5) };
+        var element = new Element { Length = { Value = MediaTime.FromSeconds(5) } };
         element.AddObject(CreateDrawable());
 
         JsonObject json = CoreSerializer.SerializeToJsonObject(element);
         var restored = (Element)CoreSerializer.DeserializeFromJsonObject(json, typeof(Element));
 
         var drawable = (PsdTachieDrawable)restored.Objects.Single();
-        Assert.That(drawable.Source.CurrentValue!.FullName, Is.EqualTo(Path.GetFullPath(TestData("tachie_rle.psd"))));
-        Assert.That(drawable.MouthOpen.CurrentValue, Is.EqualTo("口/*開き"));
-        Assert.That(drawable.BlinkInterval.CurrentValue, Is.EqualTo(1f));
+        Assert.That(drawable.Source.Value!.FullName, Is.EqualTo(Path.GetFullPath(TestData("tachie_rle.psd"))));
+        Assert.That(drawable.MouthOpen.Value, Is.EqualTo("口/*開き"));
+        Assert.That(drawable.BlinkInterval.Value, Is.EqualTo(1f));
     }
 
     [Test]
@@ -148,29 +148,29 @@ public class PsdTachieRenderTests
         {
             // Without eyes: blinks start over in the back half.
             PsdTachieDrawable drawable = CreateDrawable();
-            drawable.EyeOpen.CurrentValue = "";
-            drawable.EyeHalfOpen.CurrentValue = "";
-            drawable.EyeClosed.CurrentValue = "";
+            drawable.EyeOpen.Value = "";
+            drawable.EyeHalfOpen.Value = "";
+            drawable.EyeClosed.Value = "";
             var audio = new SoundSource();
             audio.ReadFrom(new Uri(wav));
-            drawable.LipSyncAudio.CurrentValue = audio;
+            drawable.LipSyncAudio.Value = audio;
             return drawable;
         }
 
-        Scene whole = HeadlessScene.Create((Create(), TimeSpan.FromSeconds(5)));
-        Scene split = HeadlessScene.Create((Create(), TimeSpan.FromSeconds(5)));
-        Element back = HeadlessScene.Split(split, split.Children[0], TimeSpan.FromSeconds(0.5));
+        Scene whole = HeadlessScene.Create((Create(), MediaTime.FromSeconds(5)));
+        Scene split = HeadlessScene.Create((Create(), MediaTime.FromSeconds(5)));
+        Element back = HeadlessScene.Split(split, split.Children[0], MediaTime.FromSeconds(0.5));
 
         var backDrawable = back.Objects.OfType<PsdTachieDrawable>().Single();
-        Assert.That(backDrawable.LipSyncOffset.CurrentValue, Is.EqualTo(TimeSpan.FromSeconds(-0.5)));
-        Assert.That(backDrawable.TryGetOriginalDuration(out TimeSpan backDuration), Is.True);
-        Assert.That(backDuration, Is.EqualTo(TimeSpan.FromSeconds(1.5)), "The rest of the voice.");
+        Assert.That(backDrawable.LipSyncOffset.Value, Is.EqualTo(MediaTime.FromSeconds(-0.5)));
+        Assert.That(backDrawable.TryGetOriginalDuration(out MediaTime backDuration), Is.True);
+        Assert.That(backDuration, Is.EqualTo(MediaTime.FromSeconds(1.5)), "The rest of the voice.");
 
         // Still speaking, then silent: the back half must not start the voice over.
         foreach (double seconds in new[] { 0.75, 1.25 })
         {
-            using Bitmap expected = HeadlessScene.Render(whole, TimeSpan.FromSeconds(seconds));
-            using Bitmap actual = HeadlessScene.Render(split, TimeSpan.FromSeconds(seconds));
+            using Bitmap expected = HeadlessScene.Render(whole, MediaTime.FromSeconds(seconds));
+            using Bitmap actual = HeadlessScene.Render(split, MediaTime.FromSeconds(seconds));
             HeadlessScene.AssertSameFrame(expected, actual);
         }
     }

@@ -68,7 +68,7 @@ internal static class PsdEditorHelper
     public static LoadedPsd? TryLoad(PsdTachieDrawable? drawable, out string? error)
     {
         error = null;
-        FileInfo? file = drawable?.Source.CurrentValue;
+        FileInfo? file = drawable?.Source.Value;
         if (file == null)
             return null;
 

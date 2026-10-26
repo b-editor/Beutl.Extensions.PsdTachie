@@ -11,7 +11,10 @@ namespace Beutl.Extensions.PsdTachie.Tests;
 public sealed class HeadlessApp : Application
 {
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<HeadlessApp>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+        AppBuilder.Configure<HeadlessApp>()
+            .UseHarfBuzz()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 
     public override void Initialize()
     {

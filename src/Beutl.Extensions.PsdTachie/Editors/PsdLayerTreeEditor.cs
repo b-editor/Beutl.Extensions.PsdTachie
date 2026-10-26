@@ -119,7 +119,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
     {
         PsdTachieDrawable? drawable = _context.Drawable;
         foreach (LayerNode node in _nodes)
-            node.SetShape(drawable == null ? -1 : Array.FindIndex(s_shapes, s => s.Property(drawable).CurrentValue == node.Layer.Path));
+            node.SetShape(drawable == null ? -1 : Array.FindIndex(s_shapes, s => s.Property(drawable).Value == node.Layer.Path));
     }
 
     /// <summary>
@@ -136,11 +136,11 @@ internal sealed class PsdLayerTreeEditor : UserControl
         {
             IProperty<string> property = s_shapes[i].Property(drawable);
             string value = i == shape ? node.Layer.Path
-                : property.CurrentValue == node.Layer.Path ? ""
-                : property.CurrentValue;
-            if (property.CurrentValue != value)
+                : property.Value == node.Layer.Path ? ""
+                : property.Value;
+            if (property.Value != value)
             {
-                property.CurrentValue = value;
+                property.Value = value;
                 changed = true;
             }
         }

@@ -5,8 +5,8 @@
         <Title>PSD立ち絵</Title>
         <Description>PSDファイルのレイヤーを切り替えて表示し、口パクと目パチを自動で行う立ち絵オブジェクトを追加します</Description>
         <PackageTags>psd,tachie,lipsync,character,立ち絵,口パク</PackageTags>
-        <Version>0.1.1</Version>
-        <AssemblyVersion>0.1.1.0</AssemblyVersion>
+        <Version>0.1.2</Version>
+        <AssemblyVersion>0.1.2.0</AssemblyVersion>
         <Authors>Yuto Terada</Authors>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageIcon>icon.png</PackageIcon>

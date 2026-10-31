@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROJECT: src/Beutl.Extensions.PsdTachie/Beutl.Extensions.PsdTachie.csproj
+  NUGET_SOURCE: https://nuget.beditor.net/v3/index.json
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # The csproj is the source of truth for the version, so a tag that disagrees with it stops the release.
+      - name: Verify tag matches project version
+        id: version
+        run: |
+          version=$(dotnet msbuild "$PROJECT" -getProperty:Version)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$version</Version> in $PROJECT."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Pack
+        run: dotnet pack "$PROJECT" -c Release -o artifacts
+
+      - name: Push to nuget.beditor.net
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::Set the NUGET_API_KEY secret to a nuget.beditor.net API key with the package:push scope."
+            exit 1
+          fi
+          dotnet nuget push "artifacts/*.nupkg" \
+            --source "$NUGET_SOURCE" \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
+
+      # On a re-run the release already exists, so only its packages are replaced.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/*.nupkg --clobber
+            exit 0
+          fi
+          prerelease=
+          case "$VERSION" in
+            *-*) prerelease=--prerelease ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag \
+            $prerelease

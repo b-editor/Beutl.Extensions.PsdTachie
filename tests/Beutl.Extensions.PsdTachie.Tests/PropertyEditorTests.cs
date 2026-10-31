@@ -5,8 +5,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.NUnit;
-using Avalonia.Layout;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -17,6 +19,7 @@ using Beutl.Extensions.PsdTachie.Editors;
 using Beutl.Extensions.PsdTachie.Graphics;
 using Beutl.ProjectSystem;
 using Beutl.PropertyAdapters;
+using SkiaSharp;
 
 namespace Beutl.Extensions.PsdTachie.Tests;
 
@@ -36,6 +39,7 @@ public class PropertyEditorTests
         where T : Control
     {
         var window = new Window { Width = 400, Height = 800, Content = editor };
+        window.Bind(Window.BackgroundProperty, new DynamicResourceExtension("DockSurfacePanelBrush"));
         window.Show();
         Dispatcher.UIThread.RunJobs();
         return editor;
@@ -79,7 +83,9 @@ public class PropertyEditorTests
     public void ExtensionCreatesTheLayerTree()
     {
         var extension = new PsdPropertyEditorExtension();
-        IPropertyAdapter layers = Adapters(CreateDrawable()).Single(a => a.GetEngineProperty()!.Name == nameof(PsdTachieDrawable.Layers));
+        PsdTachieDrawable drawable = CreateDrawable();
+        drawable.MouthHalfOpen.Value = "口/*半開き";
+        IPropertyAdapter layers = Adapters(drawable).Single(a => a.GetEngineProperty()!.Name == nameof(PsdTachieDrawable.Layers));
 
         object registry = typeof(PropertyEditorExtension).GetProperty("Registry", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(extension)!;
@@ -94,22 +100,102 @@ public class PropertyEditorTests
         Assert.That(control, Is.TypeOf<PsdLayerTreeEditor>());
         Assert.That(createControl.DynamicInvoke(context, panel), Is.Not.SameAs(control));
 
-        Show(control!);
-        foreach (TreeViewItem item in control!.GetVisualDescendants().OfType<TreeViewItem>().ToList())
+        Control editor = Show(control!);
+        foreach (TreeViewItem item in editor.GetVisualDescendants().OfType<TreeViewItem>().ToList())
             item.IsExpanded = true;
-        var window = (Window)TopLevel.GetTopLevel(control)!;
-        foreach (int width in new[] { 280, 400 })
+        var window = (Window)TopLevel.GetTopLevel(editor)!;
+        foreach (ThemeVariant theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
         {
-            window.Width = width;
-            Dispatcher.UIThread.RunJobs();
-            using var frame = window.CaptureRenderedFrame();
-            Assert.That(frame, Is.Not.Null);
-            string directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "rendered");
-            Directory.CreateDirectory(directory);
-            string path = Path.Combine(directory, $"psd-editor-{width}.png");
-            frame!.Save(path, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
-            TestContext.AddTestAttachment(path);
+            foreach (int width in new[] { 280, 400 })
+            {
+                window.RequestedThemeVariant = theme;
+                window.Width = width;
+                Dispatcher.UIThread.RunJobs();
+                TreeView tree = editor.GetVisualDescendants().OfType<TreeView>().Single();
+                DockPanel assigned = LayerRow(editor, "📁 口", "半開き");
+                ComboBox shape = ShapeBox(assigned);
+                Assert.That(shape.Theme, Is.SameAs(editor.FindResource("LiteComboBoxStyle")));
+                Image thumbnail = assigned.GetVisualDescendants().OfType<Image>().Single();
+                Assert.That(shape.TranslatePoint(new Point(shape.Bounds.Width, 0), tree)!.Value.X, Is.LessThanOrEqualTo(tree.Bounds.Width));
+                Assert.That(thumbnail.TranslatePoint(new Point(thumbnail.Bounds.Width, 0), assigned)!.Value.X, Is.LessThan(shape.Bounds.Left));
+                using var frame = window.CaptureRenderedFrame();
+                Assert.That(frame, Is.Not.Null);
+                string directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "rendered");
+                Directory.CreateDirectory(directory);
+                string path = Path.Combine(directory, $"psd-editor-{theme}-{width}.png");
+                frame!.Save(path, new PngBitmapEncoderOptions());
+                TestContext.AddTestAttachment(path);
+            }
         }
+        window.Close();
+    }
+
+    [AvaloniaTest]
+    public void ThumbnailsShowLayerPixelsAndCanToggleHiddenLayers()
+    {
+        static SKColor FirstPixel(Bitmap bitmap)
+        {
+            using var stream = new MemoryStream();
+            bitmap.Save(stream, new PngBitmapEncoderOptions());
+            using SKBitmap decoded = SKBitmap.Decode(stream.ToArray());
+            return decoded.GetPixel(0, 0);
+        }
+
+        PsdTachieDrawable drawable = CreateDrawable();
+        PsdLayerTreeEditor editor = ShowTree(drawable);
+        var window = (Window)TopLevel.GetTopLevel(editor)!;
+        CheckBox hidden = FindToggle<CheckBox>(editor, "非表示");
+        Image image = hidden.GetVisualDescendants().OfType<Image>().Single();
+        var thumbnail = (Bitmap)image.Source!;
+        Assert.That(FirstPixel(thumbnail), Is.EqualTo(new SKColor(255, 255, 0, 255)));
+
+        // A thumbnail is part of its checkbox's click target, even when the layer is currently hidden.
+        Point point = image.TranslatePoint(new Point(image.Bounds.Width / 2, image.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.That(drawable.Layers.Value, Is.EqualTo("+非表示"));
+        Assert.That(image.Source, Is.SameAs(thumbnail), "Visibility changes reuse the thumbnail.");
+
+        DockPanel shadow = LayerRow(editor, "📁 体", "影");
+        var translucent = (Bitmap)shadow.GetVisualDescendants().OfType<Image>().Single().Source!;
+        Assert.That(FirstPixel(translucent), Is.EqualTo(new SKColor(0, 0, 255, 128)), "Layer masks are applied in layer coordinates.");
+        var half = (Bitmap)FindToggle<CheckBox>(editor, "半透明").GetVisualDescendants().OfType<Image>().Single().Source!;
+        Assert.That(FirstPixel(half), Is.EqualTo(new SKColor(255, 255, 255, 128)), "Layer opacity is applied too.");
+
+        var background = (Bitmap)FindToggle<CheckBox>(editor, "背景").GetVisualDescendants().OfType<Image>().Single().Source!;
+        Assert.That(background.PixelSize, Is.EqualTo(new PixelSize(56, 42)), "Thumbnails are bounded and keep their aspect ratio.");
+        Assert.That(FindToggle<CheckBox>(editor, "📁 体").GetVisualDescendants().OfType<Image>(), Is.Empty);
+        window.Close();
+    }
+
+    [AvaloniaTest]
+    public void ThumbnailsFollowSourceChangesAndEditorReattachment()
+    {
+        PsdTachieDrawable drawable = CreateDrawable();
+        PsdLayerTreeEditor editor = ShowTree(drawable);
+        var window = (Window)TopLevel.GetTopLevel(editor)!;
+        var previous = (Bitmap)FindToggle<CheckBox>(editor, "背景").GetVisualDescendants().OfType<Image>().Single().Source!;
+
+        drawable.Source.Value = new FileInfo(TestData("depth16.psd"));
+        Dispatcher.UIThread.RunJobs();
+        var current = (Bitmap)FindToggle<CheckBox>(editor, "bg").GetVisualDescendants().OfType<Image>().Single().Source!;
+        Assert.That(current.PixelSize, Is.EqualTo(new PixelSize(32, 24)));
+        Assert.That(() => previous.PixelSize, Throws.TypeOf<ObjectDisposedException>());
+
+        // A source-change callback already in the dispatcher must not reload a detached editor.
+        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
+        window.Content = null;
+        Dispatcher.UIThread.RunJobs();
+        Assert.That(editor.GetVisualDescendants().OfType<Image>(), Is.Empty);
+        Assert.That(() => current.PixelSize, Throws.TypeOf<ObjectDisposedException>());
+
+        window.Content = editor;
+        Dispatcher.UIThread.RunJobs();
+        Assert.That(FindToggle<CheckBox>(editor, "背景").GetVisualDescendants().OfType<Image>().Single().Source, Is.Not.Null);
+        drawable.Source.Value = null;
+        Dispatcher.UIThread.RunJobs();
+        Assert.That(editor.GetVisualDescendants().OfType<Image>(), Is.Empty);
         window.Close();
     }
 
@@ -156,11 +242,6 @@ public class PropertyEditorTests
         var adapter = new EnginePropertyAdapter<string>(drawable.Layers, drawable);
         var context = new PsdEditorContext<string>(new PsdPropertyEditorExtension(), adapter, PsdEditorKind.LayerState);
         var editor = new PsdLayerTreeEditor(context);
-        // Beutl's FluentAvalonia theme tops the radio button label and pads it down 6px to meet the glyph.
-        var topped = new Style(x => x.OfType<RadioButton>());
-        topped.Setters.Add(new Setter(ContentControl.VerticalContentAlignmentProperty, VerticalAlignment.Top));
-        topped.Setters.Add(new Setter(ContentControl.PaddingProperty, new Thickness(8, 6, 8, 0)));
-        editor.Styles.Add(topped);
         Show(editor);
         foreach (TreeViewItem item in editor.GetVisualDescendants().OfType<TreeViewItem>().ToList())
             item.IsExpanded = true;

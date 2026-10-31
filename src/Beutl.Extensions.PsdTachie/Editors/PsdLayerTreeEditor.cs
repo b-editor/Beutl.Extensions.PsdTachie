@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
@@ -11,15 +12,20 @@ using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Beutl.Engine;
 using Beutl.Extensions.PsdTachie.Graphics;
 using Beutl.Extensions.PsdTachie.Psd;
+using SkiaSharp;
 
 namespace Beutl.Extensions.PsdTachie.Editors;
 
 /// <summary>
-/// Shows the PSD's layer tree with a check box (or radio button for '*' layers) per layer. At the right of each row,
+/// Shows the PSD's layer tree with a thumbnail and check box (or radio button for '*' layers) per layer. At the right of each row,
 /// a combo box assigns the layer to a mouth or eye shape; it shows while the row is hovered, or always once assigned.
 /// </summary>
 internal sealed class PsdLayerTreeEditor : UserControl
@@ -60,6 +66,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
             MaxHeight = 420,
             ItemTemplate = new FuncTreeDataTemplate<LayerNode>(BuildNodeView, node => node.Children),
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(_tree, ScrollBarVisibility.Disabled);
         _messageText = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Opacity = 0.7 };
 
         var resetButton = new Button { Content = "PSDの初期状態に戻す", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
@@ -99,6 +106,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
         _drawable = null;
         _valueSubscription?.Dispose();
         _valueSubscription = null;
+        ClearNodes();
     }
 
     private void OnSourceChanged(object? sender, PropertyValueChangedEventArgs<FileInfo?> e)
@@ -152,9 +160,12 @@ internal sealed class PsdLayerTreeEditor : UserControl
 
     private void Reload()
     {
+        // A queued source change can arrive after the editor has been closed.
+        if (!this.IsAttachedToVisualTree())
+            return;
+
+        ClearNodes();
         _loaded = PsdEditorHelper.TryLoad(_context.Drawable, out string? error);
-        _roots.Clear();
-        _nodes.Clear();
         if (_loaded == null)
         {
             _flags = null;
@@ -171,6 +182,16 @@ internal sealed class PsdLayerTreeEditor : UserControl
         foreach (PsdLayer layer in document.Root.Children.Reverse())
             _roots.Add(CreateNode(layer));
         RefreshShapes();
+    }
+
+    private void ClearNodes()
+    {
+        _roots.Clear();
+        foreach (LayerNode node in _nodes)
+            node.Dispose();
+        _nodes.Clear();
+        _loaded = null;
+        _flags = null;
     }
 
     private LayerNode CreateNode(PsdLayer layer)
@@ -221,13 +242,41 @@ internal sealed class PsdLayerTreeEditor : UserControl
         // 6px padding, which this padding removes. Centred, it sits on the glyph whatever the theme.
         toggle.VerticalContentAlignment = VerticalAlignment.Center;
         toggle[!ToggleButton.IsCheckedProperty] = new Binding(nameof(LayerNode.IsChecked)) { Mode = BindingMode.TwoWay };
-        toggle.HorizontalAlignment = HorizontalAlignment.Left;
-        toggle.Content = new TextBlock
+        toggle.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        AutomationProperties.SetName(toggle, node.Layer.DisplayName);
+        ToolTip.SetTip(toggle, node.Layer.DisplayName);
+        var label = new TextBlock
         {
             Text = node.Layer.IsGroup ? $"📁 {node.Layer.DisplayName}" : node.Layer.DisplayName,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
         };
+        if (node.Layer.IsGroup)
+        {
+            toggle.Content = label;
+        }
+        else
+        {
+            var thumbnail = new Border
+            {
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(0, 0, 6, 0),
+                Padding = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = new SolidColorBrush(Colors.Gray, 0.2),
+                BorderBrush = new SolidColorBrush(Colors.Gray, 0.5),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(2),
+                Child = new Image { Source = node.Thumbnail, Stretch = Stretch.Uniform },
+            };
+            Grid.SetColumn(label, 1);
+            toggle.Content = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                Children = { thumbnail, label },
+            };
+        }
 
         // The shape the layer stands for: lip sync and blinking switch it, whatever its check says.
         var shape = new ComboBox
@@ -283,16 +332,36 @@ internal sealed class PsdLayerTreeEditor : UserControl
         return view;
     }
 
-    private sealed class LayerNode(PsdLayerTreeEditor owner, PsdLayer layer) : INotifyPropertyChanged
+    private static Bitmap? CreateThumbnail(PsdLayer layer)
+    {
+        // Keep only an icon-sized copy for a 2x display; use the layer's bounds so small parts stay readable.
+        using SKBitmap? pixels = PsdCompositor.CreateLayerThumbnail(layer, 56);
+        if (pixels == null)
+            return null;
+
+        return new Bitmap(PixelFormat.Rgba8888, AlphaFormat.Premul, pixels.GetPixels(),
+            new PixelSize(pixels.Width, pixels.Height), new Vector(96, 96), pixels.RowBytes);
+    }
+
+    private sealed class LayerNode(PsdLayerTreeEditor owner, PsdLayer layer) : INotifyPropertyChanged, IDisposable
     {
         private bool _isChecked;
         private int _shape = -1;
+        private readonly Lazy<Bitmap?> _thumbnail = new(() => CreateThumbnail(layer));
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public PsdLayer Layer { get; } = layer;
 
         public ObservableCollection<LayerNode> Children { get; } = [];
+
+        public Bitmap? Thumbnail => _thumbnail.Value;
+
+        public void Dispose()
+        {
+            if (_thumbnail.IsValueCreated)
+                _thumbnail.Value?.Dispose();
+        }
 
         public bool IsChecked
         {

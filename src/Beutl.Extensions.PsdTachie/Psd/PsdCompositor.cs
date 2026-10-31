@@ -36,6 +36,26 @@ public sealed class PsdCompositor : IDisposable
         }
     }
 
+    /// <summary>Renders a pixel layer in isolation, including its mask and opacity. The caller owns the thumbnail.</summary>
+    internal static SKBitmap? CreateLayerThumbnail(PsdLayer layer, int maxSize)
+    {
+        using SKBitmap? pixels = CreateLayerBitmap(layer);
+        if (pixels == null)
+            return null;
+
+        double scale = Math.Min(1, (double)maxSize / Math.Max(pixels.Width, pixels.Height));
+        int width = Math.Max(1, (int)Math.Round(pixels.Width * scale));
+        int height = Math.Max(1, (int)Math.Round(pixels.Height * scale));
+        var thumbnail = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        thumbnail.Erase(SKColors.Empty);
+        using var canvas = new SKCanvas(thumbnail);
+        canvas.Scale((float)width / layer.Width, (float)height / layer.Height);
+        canvas.Translate(-layer.Left, -layer.Top);
+        DrawLayerBitmap(canvas, layer, pixels, layer.Opacity, SKBlendMode.SrcOver, new SKSamplingOptions(SKFilterMode.Linear));
+        canvas.Flush();
+        return thumbnail;
+    }
+
     public void Dispose()
     {
         lock (_lock)
@@ -131,21 +151,25 @@ public sealed class PsdCompositor : IDisposable
         }
 
         SKBitmap? bitmap = GetLayerBitmap(layer);
-        if (bitmap == null)
-            return;
+        if (bitmap != null)
+            DrawLayerBitmap(canvas, layer, bitmap, opacity, blendMode);
+    }
 
+    private static void DrawLayerBitmap(SKCanvas canvas, PsdLayer layer, SKBitmap bitmap, byte opacity, SKBlendMode blendMode,
+        SKSamplingOptions sampling = default)
+    {
         byte alpha = (byte)(opacity * layer.FillOpacity / 255);
         using var layerPaint = new SKPaint { Color = SKColors.Black.WithAlpha(alpha), BlendMode = blendMode };
         if (layer.Mask == null)
         {
-            DrawBitmapAt(canvas, bitmap, layer.Left, layer.Top, layerPaint);
+            DrawBitmapAt(canvas, bitmap, layer.Left, layer.Top, layerPaint, sampling);
             return;
         }
 
         canvas.SaveLayer(layerPaint);
         ApplyMaskClip(canvas, layer.Mask);
-        DrawBitmapAt(canvas, bitmap, layer.Left, layer.Top, null);
-        DrawMask(canvas, layer.Mask);
+        DrawBitmapAt(canvas, bitmap, layer.Left, layer.Top, null, sampling);
+        DrawMask(canvas, layer.Mask, sampling);
         canvas.Restore();
     }
 
@@ -156,7 +180,7 @@ public sealed class PsdCompositor : IDisposable
             canvas.ClipRect(SKRect.Create(mask.Left, mask.Top, mask.Width, mask.Height));
     }
 
-    private static void DrawMask(SKCanvas canvas, PsdLayerMask? mask)
+    private static void DrawMask(SKCanvas canvas, PsdLayerMask? mask, SKSamplingOptions sampling = default)
     {
         if (mask == null || mask.Width <= 0 || mask.Height <= 0)
             return;
@@ -169,15 +193,15 @@ public sealed class PsdCompositor : IDisposable
             {
                 maskBitmap.InstallPixels(info, (nint)pixels, mask.Width);
                 using var paint = new SKPaint { BlendMode = SKBlendMode.DstIn };
-                DrawBitmapAt(canvas, maskBitmap, mask.Left, mask.Top, paint);
+                DrawBitmapAt(canvas, maskBitmap, mask.Left, mask.Top, paint, sampling);
             }
         }
     }
 
-    private static void DrawBitmapAt(SKCanvas canvas, SKBitmap bitmap, int x, int y, SKPaint? paint)
+    private static void DrawBitmapAt(SKCanvas canvas, SKBitmap bitmap, int x, int y, SKPaint? paint, SKSamplingOptions sampling = default)
     {
         using SKImage image = SKImage.FromBitmap(bitmap);
-        canvas.DrawImage(image, x, y, SKSamplingOptions.Default, paint);
+        canvas.DrawImage(image, x, y, sampling, paint);
     }
 
     private SKBitmap? GetLayerBitmap(PsdLayer layer)

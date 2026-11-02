@@ -104,6 +104,52 @@ public class PsdTachieRenderTests
     }
 
     [Test]
+    public void ASurroundVoiceMovesTheMouthLikeItsStereoFold()
+    {
+        TestWaveDecoder.EnsureRegistered();
+        const int rate = 44100;
+        const float centreGain = 0.70710677f;
+        // One second of voice, then one silent second. Its stereo fold passes "開く音量" (-22 dB against -24 dB);
+        // averaged over all six channels it would not (-27 dB), so the mouth would only half open.
+        static float Voice(int i) => i < rate ? 0.16f * MathF.Sin(2 * MathF.PI * 220 * i / rate) : 0f;
+        string surroundWav = Path.Combine(TestContext.CurrentContext.WorkDirectory, "lipsync-surround.wav");
+        TestWaveDecoder.Write(surroundWav, rate, Enumerable.Range(0, rate * 2)
+            .SelectMany(i => new[] { 0f, 0f, Voice(i), 0f, 0f, 0f }), channels: 6);
+        string stereoWav = Path.Combine(TestContext.CurrentContext.WorkDirectory, "lipsync-surround-fold.wav");
+        TestWaveDecoder.Write(stereoWav, rate, Enumerable.Range(0, rate * 2)
+            .SelectMany(i => new[] { centreGain * Voice(i), centreGain * Voice(i) }), channels: 2);
+
+        Scene Create(string wav)
+        {
+            PsdTachieDrawable drawable = CreateDrawable();
+            drawable.EyeOpen.Value = "";
+            drawable.EyeHalfOpen.Value = "";
+            drawable.EyeClosed.Value = "";
+            var audio = new SoundSource();
+            audio.ReadFrom(new Uri(wav));
+            drawable.LipSyncAudio.Value = audio;
+            return HeadlessScene.Create((drawable, MediaTime.FromSeconds(5)));
+        }
+
+        Scene surround = Create(surroundWav);
+        Scene stereo = Create(stereoWav);
+
+        using Bitmap speaking = HeadlessScene.Render(surround, MediaTime.FromSeconds(0.5));
+        using Bitmap silent = HeadlessScene.Render(surround, MediaTime.FromSeconds(1.5));
+        HeadlessScene.SaveForInspection(speaking, "psd-lipsync-surround.png");
+        // Row 13 is the open mouth's colour only when the mouth opens fully.
+        HeadlessScene.AssertColor(PsdPixel(speaking, 43, 13), (190, 0, 0));
+        HeadlessScene.AssertColor(PsdPixel(silent, 43, 12), s_background, tolerance: 12);
+
+        foreach (double seconds in new[] { 0.5, 1.5 })
+        {
+            using Bitmap expected = HeadlessScene.Render(stereo, MediaTime.FromSeconds(seconds));
+            using Bitmap actual = HeadlessScene.Render(surround, MediaTime.FromSeconds(seconds));
+            HeadlessScene.AssertSameFrame(expected, actual);
+        }
+    }
+
+    [Test]
     public void StoredLayerStateHidesAndShowsLayers()
     {
         PsdTachieDrawable drawable = CreateDrawable();

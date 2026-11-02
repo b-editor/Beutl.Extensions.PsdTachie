@@ -74,11 +74,15 @@ internal sealed class LoudnessEnvelope
     {
         var values = new float[BinsPerSecond];
         values.AsSpan().Fill(float.NegativeInfinity);
-        if (!Source.Read(MediaTime.FromSeconds(block), MediaTime.FromSeconds(1), out AudioBuffer? audio))
+        if (!Source.Read(MediaTime.FromSeconds(block), MediaTime.FromSeconds(1), out AudioBuffer? decoded))
             return values;
 
-        using (audio)
+        using (decoded)
         {
+            // Decoders return the source's own channels, but the thresholds mean the level of its stereo fold:
+            // averaging 5.1 directly would make a centre voice read lower because the other channels are silent.
+            using AudioBuffer? converted = AudioChannelMatrix.ConvertOrNull(decoded, Source.ChannelLayout, AudioChannelLayout.Stereo);
+            AudioBuffer audio = converted ?? decoded;
             int samplesPerBin = Math.Max(1, audio.SampleRate / BinsPerSecond);
             for (int i = 0; i < BinsPerSecond; i++)
             {

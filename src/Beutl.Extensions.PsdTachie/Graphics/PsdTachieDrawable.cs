@@ -101,26 +101,6 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             LipSyncOffset.Value -= startDelta;
     }
 
-    protected override Size MeasureCore(Size availableSize, Drawable.Resource resource)
-    {
-        var r = (Resource)resource;
-        return r.Loaded?.Document is { } document
-            ? new Size(document.Width, document.Height)
-            : default;
-    }
-
-    protected override void OnDraw(GraphicsContext2D context, Drawable.Resource resource)
-    {
-        var r = (Resource)resource;
-        if (r.Frame is { IsDisposed: false } frame)
-        {
-            context.DrawNode(
-                frame,
-                static bitmap => new PsdBitmapRenderNode(bitmap),
-                static (node, bitmap) => node.Update(bitmap));
-        }
-    }
-
     public partial class Resource
     {
         // A short hold keeps the mouth from flickering between syllables.
@@ -136,6 +116,24 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
         internal Bitmap? Frame { get; private set; }
 
         internal LoadedPsd? Loaded { get; private set; }
+
+        protected override Size MeasureCore(Size availableSize)
+        {
+            return Loaded?.Document is { } document
+                ? new Size(document.Width, document.Height)
+                : default;
+        }
+
+        protected override void OnDraw(GraphicsContext2D context)
+        {
+            if (Frame is { IsDisposed: false } frame)
+            {
+                context.DrawNode(
+                    frame,
+                    static bitmap => new PsdBitmapRenderNode(bitmap),
+                    static (node, bitmap) => node.Update(bitmap));
+            }
+        }
 
         partial void PostReconcile(PsdTachieDrawable obj, CompositionContext context)
         {

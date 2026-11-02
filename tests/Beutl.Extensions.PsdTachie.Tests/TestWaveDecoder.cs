@@ -51,7 +51,10 @@ internal sealed class TestWaveDecoder : IDecoderInfo
                 "pcm",
                 new Rational(_reader.SampleCount, _reader.WaveFormat.SampleRate),
                 _reader.WaveFormat.SampleRate,
-                _reader.WaveFormat.Channels);
+                _reader.WaveFormat.Channels)
+            {
+                ChannelLayout = AudioChannelLayout.GetDefault(_reader.WaveFormat.Channels),
+            };
         }
 
         public override VideoStreamInfo VideoInfo => throw new NotSupportedException();

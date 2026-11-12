@@ -1,12 +1,12 @@
-<Project Sdk="Beutl.Extensibility.Sdk/2.0.0-preview.11">
+<Project Sdk="Beutl.Extensibility.Sdk/2.0.0-preview.12">
 
     <PropertyGroup>
         <PackageId>Beutl.Extensions.PsdTachie</PackageId>
         <Title>PSD立ち絵</Title>
         <Description>PSDファイルのレイヤーを切り替えて表示し、口パクと目パチを自動で行う立ち絵オブジェクトを追加します</Description>
         <PackageTags>psd,tachie,lipsync,character,立ち絵,口パク</PackageTags>
-        <Version>0.1.4</Version>
-        <AssemblyVersion>0.1.4.0</AssemblyVersion>
+        <Version>0.1.5</Version>
+        <AssemblyVersion>0.1.5.0</AssemblyVersion>
         <Authors>Yuto Terada</Authors>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageIcon>icon.png</PackageIcon>
@@ -19,7 +19,7 @@
             Include="Beutl.Engine.SourceGenerators"
             OutputItemType="Analyzer"
             ReferenceOutputAssembly="false"
-            Version="2.0.0-preview.11"
+            Version="2.0.0-preview.12"
             PrivateAssets="all" />
     </ItemGroup>
 

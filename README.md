@@ -51,7 +51,7 @@ PSDToolKitなどで使われている命名規約に従います。
 
 ## 開発
 
-`Beutl.Extensibility.Sdk` 2.0.0-preview.11 でビルドします。
+`Beutl.Extensibility.Sdk` 2.0.0-preview.12 と .NET 11 SDK でビルドします。
 
 ```bash
 dotnet build src/Beutl.Extensions.PsdTachie
@@ -64,7 +64,7 @@ dotnet test tests/Beutl.Extensions.PsdTachie.Tests
 テストは次の3種類です。
 
 - **パーサーと合成**: psd-tools（独立したPSD実装）で作ったPSDと、その合成画像を正解として比較します。フィクスチャは `tools/make_psd_fixtures.py` で再生成できます。
-- **描画**: Beutlの `SceneRenderer` を使い、エディタを起動せずにシーンを描画して画素を確認します。描画した画像は `bin/Debug/net10.0/rendered/` に保存されます。グラフィックスコンテキストを作れない環境では、このテストはスキップされます。
+- **描画**: Beutlの `SceneRenderer` を使い、エディタを起動せずにシーンを描画して画素を確認します。描画した画像は `bin/Debug/net11.0/rendered/` に保存されます。グラフィックスコンテキストを作れない環境では、このテストはスキップされます。
 - **プロパティエディタ**: Avalonia.Headlessでエディタを操作し、プロパティへの書き込みを確認します。
 
 Beutlにサイドロードして試す場合は、次のコマンドで `~/.beutl/sideloads` に出力します。

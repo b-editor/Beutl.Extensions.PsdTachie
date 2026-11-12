@@ -30,7 +30,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6.0.0
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
 
       # The csproj is the source of truth for the version, so a tag that disagrees with it stops the release.
       - name: Verify tag matches project version

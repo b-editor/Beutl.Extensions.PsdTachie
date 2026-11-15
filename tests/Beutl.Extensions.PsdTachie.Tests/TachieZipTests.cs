@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Reflection;
 using System.Text;
 using Beutl.Composition;
 using Beutl.Extensions.PsdTachie.Graphics;
@@ -43,6 +44,36 @@ public class TachieZipTests
         using SKBitmap whole = loaded.Compositor.Compose(changed);
         Assert.That(whole.GetPixel(2, 1), Is.EqualTo(SKColors.Magenta));
         Assert.That(whole.GetPixel(3, 2).Alpha, Is.Zero, "A complete pose replaces all parts, including at transparent pixels.");
+    }
+
+    [Test]
+    public void ReleasesHiddenZipBitmapsAndReusesPartsThatStayVisible()
+    {
+        using var file = new PartArchive();
+        PsdDocument doc = PsdDocumentCache.Load(file.Path).Document;
+        using var compositor = new PsdCompositor(doc);
+        bool[] flags = PsdLayerState.Resolve(doc, "");
+        using SKBitmap initial = compositor.Compose(flags);
+        var cache = (IReadOnlyDictionary<int, SKBitmap?>)typeof(PsdCompositor)
+            .GetField("_layerBitmaps", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(compositor)!;
+        int bodyIndex = doc.FindByPath("体/*00")!.Index;
+        SKBitmap body = cache[bodyIndex]!;
+        SKBitmap eye = cache[doc.FindByPath("目/*00")!.Index]!;
+
+        PsdLayerState.SetVisible(flags, doc.FindByPath("目/*07-1")!, true);
+        using SKBitmap expression = compositor.Compose(flags);
+        Assert.That(eye.Handle, Is.EqualTo(IntPtr.Zero));
+        Assert.That(cache[bodyIndex], Is.SameAs(body));
+
+        PsdLayer pose = doc.FindByPath("全/*200")!;
+        PsdLayerState.SetVisible(flags, pose, true);
+        using SKBitmap whole = compositor.Compose(flags);
+        Assert.That(cache.Keys, Is.EquivalentTo(new[] { pose.Index }));
+        Assert.That(body.Handle, Is.EqualTo(IntPtr.Zero));
+
+        PsdLayerState.SetVisible(flags, pose, false);
+        using SKBitmap restored = compositor.Compose(flags);
+        Assert.That(restored.GetPixelSpan().SequenceEqual(expression.GetPixelSpan()), Is.True);
     }
 
     [Test]

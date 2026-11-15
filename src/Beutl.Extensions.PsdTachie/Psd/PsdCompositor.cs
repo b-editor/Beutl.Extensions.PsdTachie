@@ -32,7 +32,17 @@ public sealed class PsdCompositor : IDisposable
             using var canvas = new SKCanvas(bitmap);
             if (Document.Zip is { } zip)
             {
-                foreach ((PsdLayer layer, int offsetY) in zip.VisibleLayers(flags))
+                var visibleLayers = zip.VisibleLayers(flags).ToArray();
+                // A whole pose can hide checked parts. Release their pixels before decoding the new selection.
+                var unused = _layerBitmaps.Keys.ToHashSet();
+                unused.ExceptWith(visibleLayers.Select(part => part.Layer.Index));
+                foreach (int index in unused)
+                {
+                    _layerBitmaps.Remove(index, out SKBitmap? hidden);
+                    hidden?.Dispose();
+                }
+
+                foreach ((PsdLayer layer, int offsetY) in visibleLayers)
                 {
                     canvas.Save();
                     canvas.Translate(0, offsetY);

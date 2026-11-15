@@ -64,7 +64,7 @@ internal enum PsdEditorKind
 
 internal static class PsdEditorHelper
 {
-    /// <summary>Opens the PSD currently assigned to the drawable, or returns why it cannot be opened.</summary>
+    /// <summary>Opens the character file currently assigned to the drawable, or returns why it cannot be opened.</summary>
     public static LoadedPsd? TryLoad(PsdTachieDrawable? drawable, out string? error)
     {
         error = null;

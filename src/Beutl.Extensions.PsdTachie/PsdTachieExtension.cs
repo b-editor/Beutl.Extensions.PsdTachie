@@ -16,6 +16,6 @@ public sealed class PsdTachieExtension : Extension
         base.Load();
         LibraryService.Current.RegisterGroup("PSD立ち絵", g => g
             // BindDrawable also binds the EngineObject format, which the timeline requires to accept a drop.
-            .AddMultiple("PSD立ち絵", "PSDのレイヤーを切り替えて表示し、口パクと目パチを行います", m => m.BindDrawable<PsdTachieDrawable>()));
+            .AddMultiple("PSD立ち絵", "PSDやZIPの立ち絵パーツを切り替えて表示し、口パクと目パチを行います", m => m.BindDrawable<PsdTachieDrawable>()));
     }
 }

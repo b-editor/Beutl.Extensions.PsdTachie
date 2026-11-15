@@ -68,6 +68,6 @@ public class PsdLayerStateTests
     [Test]
     public void EscapeNameEscapesPathSeparators()
     {
-        Assert.That(PsdReader.EscapeName("a/b#c"), Is.EqualTo("a\\/b\\#c"));
+        Assert.That(PsdDocument.EscapeName("a/b#c"), Is.EqualTo("a\\/b\\#c"));
     }
 }

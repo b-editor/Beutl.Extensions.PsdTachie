@@ -1,15 +1,19 @@
 namespace Beutl.Extensions.PsdTachie.Psd;
 
-/// <summary>A parsed Photoshop document (PSD or PSB) with its layer tree.</summary>
+/// <summary>A layered character image with its canvas and layer tree.</summary>
 public sealed class PsdDocument
 {
-    internal PsdDocument(int width, int height, PsdLayer root, IReadOnlyList<PsdLayer> allLayers)
+    internal PsdDocument(int width, int height, PsdLayer root)
     {
         Width = width;
         Height = height;
         Root = root;
-        AllLayers = allLayers;
+        var all = new List<PsdLayer>();
+        AssignPaths(root, all);
+        AllLayers = all;
     }
+
+    internal TachieZip? Zip { get; init; }
 
     public int Width { get; }
 
@@ -30,5 +34,39 @@ public sealed class PsdDocument
         }
 
         return null;
+    }
+
+    private static void AssignPaths(PsdLayer root, List<PsdLayer> all)
+    {
+        Visit(root, "");
+
+        void Visit(PsdLayer parent, string prefix)
+        {
+            // Number duplicates from the top, the order the layer panel shows them in.
+            var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+            var paths = new string[parent.Children.Count];
+            for (int i = parent.Children.Count - 1; i >= 0; i--)
+            {
+                string escaped = EscapeName(parent.Children[i].Name);
+                int n = seen.TryGetValue(escaped, out int count) ? count + 1 : 1;
+                seen[escaped] = n;
+                paths[i] = prefix + (n == 1 ? escaped : $"{escaped}#{n}");
+            }
+
+            for (int i = 0; i < parent.Children.Count; i++)
+            {
+                PsdLayer child = parent.Children[i];
+                child.Path = paths[i];
+                child.Index = all.Count;
+                all.Add(child);
+                if (child.IsGroup)
+                    Visit(child, child.Path + "/");
+            }
+        }
+    }
+
+    internal static string EscapeName(string name)
+    {
+        return name.Replace("\\", "\\\\").Replace("/", "\\/").Replace("#", "\\#");
     }
 }

@@ -11,7 +11,7 @@ using Beutl.Media.Source;
 namespace Beutl.Extensions.PsdTachie.Graphics;
 
 /// <summary>
-/// Character art from a layered PSD. Layers can be switched individually, and the mouth and eye layers can
+/// Character art from a layered PSD or a ZIP of PNG parts. Layers can be switched individually, and the mouth and eye layers can
 /// follow an audio track and a blink timeline.
 /// </summary>
 /// <remarks>The original duration is the lip-sync audio's, counted from the object's start.</remarks>
@@ -25,7 +25,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
         HideProperties(MouthClosed, MouthHalfOpen, MouthOpen, EyeOpen, EyeHalfOpen, EyeClosed);
     }
 
-    [Display(Name = "PSDファイル")]
+    [Display(Name = "立ち絵ファイル", Description = "PSD・PSBファイル、またはパーツ別のPNGを収めたZIPファイル")]
     public IExpressionProperty<FileInfo?> Source { get; } = Property.CreateExpression<FileInfo?>();
 
     [PsdLayerState]
@@ -150,8 +150,8 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             if (loaded != null)
             {
                 MediaTime localTime = context.Time - obj.TimeRange.Value.Start;
-                Dictionary<PsdLayer, bool> choices = ChooseShapes(loaded.Document, localTime);
-                bool[] flags = PsdLayerState.Resolve(loaded.Document, Layers, choices);
+                bool[] flags = PsdLayerState.Resolve(loaded.Document, Layers);
+                ApplyShapes(loaded.Document, flags, localTime);
                 key = PsdLayerState.CreateCacheKey(flags);
                 frame = _frames.GetOrCreate(key, () => new Bitmap(loaded.Compositor.Compose(flags)));
             }
@@ -211,13 +211,15 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             }
         }
 
-        private Dictionary<PsdLayer, bool> ChooseShapes(PsdDocument document, MediaTime localTime)
+        private void ApplyShapes(PsdDocument document, bool[] flags, MediaTime localTime)
         {
             var choices = new Dictionary<PsdLayer, bool>();
 
             PsdLayer? closed = Find(document, MouthClosed);
             PsdLayer? half = Find(document, MouthHalfOpen);
             PsdLayer? open = Find(document, MouthOpen);
+            if (closed == null && half == null && open == null && document.Zip != null)
+                (closed, half, open) = document.Zip.GetAnimation("口", flags);
             if (closed != null || half != null || open != null)
             {
                 double level = MeasureLevel(localTime - LipSyncOffset);
@@ -233,6 +235,8 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
             PsdLayer? eyeOpen = Find(document, EyeOpen);
             PsdLayer? eyeHalf = Find(document, EyeHalfOpen);
             PsdLayer? eyeClosed = Find(document, EyeClosed);
+            if (eyeOpen == null && eyeHalf == null && eyeClosed == null && document.Zip != null)
+                (eyeOpen, eyeHalf, eyeClosed) = document.Zip.GetAnimation("目", flags);
             if (eyeOpen != null || eyeHalf != null || eyeClosed != null)
             {
                 EyeShape shape = BlinkSchedule.GetShape(
@@ -250,7 +254,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
                 AddChoice(choices, target, eyeOpen, eyeHalf, eyeClosed);
             }
 
-            return choices;
+            PsdLayerState.ApplyChoices(flags, choices);
         }
 
         private double MeasureLevel(MediaTime audioTime)

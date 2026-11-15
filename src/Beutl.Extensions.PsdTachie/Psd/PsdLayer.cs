@@ -61,6 +61,9 @@ public sealed class PsdLayer
 
     public PsdLayerMask? Mask { get; internal set; }
 
+    // Keep archive parts encoded until the compositor or editor first needs their pixels.
+    internal byte[]? PngData { get; init; }
+
     internal List<PsdChannel> Channels { get; } = [];
 
     internal void AddChild(PsdLayer child)

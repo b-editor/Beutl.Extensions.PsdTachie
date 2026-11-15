@@ -48,6 +48,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
 
     private readonly PsdEditorContext<string> _context;
     private readonly TreeView _tree;
+    private readonly ComboBox _presets;
     private readonly TextBlock _messageText;
     private readonly ObservableCollection<LayerNode> _roots = [];
     private readonly List<LayerNode> _nodes = [];
@@ -69,13 +70,24 @@ internal sealed class PsdLayerTreeEditor : UserControl
         ScrollViewer.SetHorizontalScrollBarVisibility(_tree, ScrollBarVisibility.Disabled);
         _messageText = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Opacity = 0.7 };
 
-        var resetButton = new Button { Content = "PSDの初期状態に戻す", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
-        resetButton.Click += (_, _) => _context.SetAndCommit("", "PSDのレイヤーを初期状態に戻す");
+        _presets = new ComboBox { PlaceholderText = "表情セットを適用", IsVisible = false, Margin = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetName(_presets, "表情セットを適用");
+        _presets.SelectionChanged += (_, _) =>
+        {
+            if (_presets.SelectedItem is string name && _loaded?.Document is { Zip: { } zip } document
+                && zip.Presets.TryGetValue(name, out PsdLayer[]? parts))
+            {
+                _context.SetAndCommit(zip.ApplyPreset(document, _context.Adapter.GetValue(), parts), "立ち絵の表情セットを適用");
+                _presets.SelectedIndex = -1;
+            }
+        };
+        var resetButton = new Button { Content = "初期状態に戻す", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+        resetButton.Click += (_, _) => _context.SetAndCommit("", "立ち絵のレイヤーを初期状態に戻す");
 
         Content = EditorLayout.WithHeader(
             context.Adapter.DisplayName,
             "チェックしたレイヤーを表示します。名前が * で始まるレイヤーは兄弟の中から1つだけ、! で始まるレイヤーは常に表示されます。レイヤーにポインターを合わせると、右側で口パク・まばたきに使う形を選べます。",
-            new StackPanel { Children = { _messageText, _tree, resetButton } });
+            new StackPanel { Children = { _messageText, _presets, _tree, resetButton } });
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -169,13 +181,18 @@ internal sealed class PsdLayerTreeEditor : UserControl
         if (_loaded == null)
         {
             _flags = null;
-            _messageText.Text = error ?? "PSDファイルを選択すると、ここにレイヤーが表示されます。";
+            _messageText.Text = error ?? "PSD・PSBまたは立ち絵ZIPを選ぶと、ここにレイヤーが表示されます。";
             _messageText.IsVisible = true;
             return;
         }
 
         _messageText.IsVisible = false;
         PsdDocument document = _loaded.Document;
+        if (document.Zip?.Presets is { Count: > 0 } presets)
+        {
+            _presets.ItemsSource = presets.Keys;
+            _presets.IsVisible = true;
+        }
         _flags = PsdLayerState.Resolve(document, _context.Adapter.GetValue());
 
         // Photoshop lists layers top first; the document stores them bottom first.
@@ -186,6 +203,8 @@ internal sealed class PsdLayerTreeEditor : UserControl
 
     private void ClearNodes()
     {
+        _presets.ItemsSource = null;
+        _presets.IsVisible = false;
         _roots.Clear();
         foreach (LayerNode node in _nodes)
             node.Dispose();
@@ -228,7 +247,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
 
         PsdLayerState.SetVisible(_flags, node.Layer, isChecked);
         string state = PsdLayerState.Serialize(_loaded.Document, _flags);
-        _context.SetAndCommit(state, "PSDのレイヤーを切り替え");
+        _context.SetAndCommit(state, "立ち絵のレイヤーを切り替え");
         RefreshChecks(state);
     }
 

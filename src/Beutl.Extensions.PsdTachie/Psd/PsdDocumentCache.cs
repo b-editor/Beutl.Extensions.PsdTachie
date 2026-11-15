@@ -22,7 +22,7 @@ public static class PsdDocumentCache
 
     /// <summary>Returns the parsed document, re-reading the file when it changed on disk.</summary>
     /// <exception cref="IOException">The file could not be read.</exception>
-    /// <exception cref="InvalidDataException">The file is not a valid PSD.</exception>
+    /// <exception cref="InvalidDataException">The PSD or character archive could not be parsed.</exception>
     /// <exception cref="NotSupportedException">The PSD uses an unsupported color mode or depth.</exception>
     public static LoadedPsd Load(string path)
     {
@@ -36,7 +36,10 @@ public static class PsdDocumentCache
             if (TryGetCurrent(fullPath, lastWrite, out cached))
                 return cached;
 
-            var loaded = new LoadedPsd(PsdReader.Read(fullPath), fullPath, lastWrite);
+            PsdDocument document = Path.GetExtension(fullPath).Equals(".zip", StringComparison.OrdinalIgnoreCase)
+                ? TachieZipReader.Read(fullPath)
+                : PsdReader.Read(fullPath);
+            var loaded = new LoadedPsd(document, fullPath, lastWrite);
             s_cache[fullPath] = new WeakReference<LoadedPsd>(loaded);
             return loaded;
         }

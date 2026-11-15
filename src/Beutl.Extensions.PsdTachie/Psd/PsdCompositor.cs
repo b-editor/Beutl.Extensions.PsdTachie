@@ -30,7 +30,20 @@ public sealed class PsdCompositor : IDisposable
             var bitmap = new SKBitmap(info);
             bitmap.Erase(SKColors.Empty);
             using var canvas = new SKCanvas(bitmap);
-            DrawChildren(canvas, Document.Root, flags);
+            if (Document.Zip is { } zip)
+            {
+                foreach ((PsdLayer layer, int offsetY) in zip.VisibleLayers(flags))
+                {
+                    canvas.Save();
+                    canvas.Translate(0, offsetY);
+                    DrawLayer(canvas, layer, flags, layer.Opacity, ToBlendMode(layer.BlendModeKey));
+                    canvas.Restore();
+                }
+            }
+            else
+            {
+                DrawChildren(canvas, Document.Root, flags);
+            }
             canvas.Flush();
             return bitmap;
         }
@@ -43,17 +56,43 @@ public sealed class PsdCompositor : IDisposable
         if (pixels == null)
             return null;
 
-        double scale = Math.Min(1, (double)maxSize / Math.Max(pixels.Width, pixels.Height));
-        int width = Math.Max(1, (int)Math.Round(pixels.Width * scale));
-        int height = Math.Max(1, (int)Math.Round(pixels.Height * scale));
+        // Archive parts include canvas-sized transparent margins, even around a single mouth.
+        SKRectI bounds = layer.PngData == null ? SKRectI.Create(pixels.Width, pixels.Height) : VisibleBounds(pixels);
+        if (bounds.IsEmpty)
+            return null;
+        double scale = Math.Min(1, (double)maxSize / Math.Max(bounds.Width, bounds.Height));
+        int width = Math.Max(1, (int)Math.Round(bounds.Width * scale));
+        int height = Math.Max(1, (int)Math.Round(bounds.Height * scale));
         var thumbnail = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         thumbnail.Erase(SKColors.Empty);
         using var canvas = new SKCanvas(thumbnail);
-        canvas.Scale((float)width / layer.Width, (float)height / layer.Height);
-        canvas.Translate(-layer.Left, -layer.Top);
+        canvas.Scale((float)width / bounds.Width, (float)height / bounds.Height);
+        canvas.Translate(-layer.Left - bounds.Left, -layer.Top - bounds.Top);
         DrawLayerBitmap(canvas, layer, pixels, layer.Opacity, SKBlendMode.SrcOver, new SKSamplingOptions(SKFilterMode.Linear));
         canvas.Flush();
         return thumbnail;
+    }
+
+    private static SKRectI VisibleBounds(SKBitmap bitmap)
+    {
+        using var alpha = new SKBitmap();
+        if (bitmap.AlphaType == SKAlphaType.Opaque || !bitmap.ExtractAlpha(alpha))
+            return SKRectI.Create(bitmap.Width, bitmap.Height);
+
+        ReadOnlySpan<byte> coverage = alpha.GetPixelSpan();
+        int left = alpha.Width, top = alpha.Height, right = 0, bottom = 0;
+        for (int y = 0; y < alpha.Height; y++)
+        {
+            ReadOnlySpan<byte> row = coverage.Slice(y * alpha.RowBytes, alpha.Width);
+            int first = row.IndexOfAnyExcept((byte)0);
+            if (first < 0)
+                continue;
+            left = Math.Min(first, left);
+            top = Math.Min(y, top);
+            right = Math.Max(row.LastIndexOfAnyExcept((byte)0) + 1, right);
+            bottom = y + 1;
+        }
+        return right == 0 ? SKRectI.Empty : new SKRectI(left, top, right, bottom);
     }
 
     public void Dispose()
@@ -216,6 +255,8 @@ public sealed class PsdCompositor : IDisposable
 
     internal static SKBitmap? CreateLayerBitmap(PsdLayer layer)
     {
+        if (layer.PngData is { } png)
+            return SKBitmap.Decode(png);
         if (layer.Width <= 0 || layer.Height <= 0)
             return null;
 

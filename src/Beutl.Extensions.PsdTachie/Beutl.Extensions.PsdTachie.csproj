@@ -3,7 +3,7 @@
     <PropertyGroup>
         <PackageId>Beutl.Extensions.PsdTachie</PackageId>
         <Title>PSD立ち絵</Title>
-        <Description>PSDファイルのレイヤーを切り替えて表示し、口パクと目パチを自動で行う立ち絵オブジェクトを追加します</Description>
+        <Description>PSDやZIPの立ち絵パーツを切り替えて表示し、口パクと目パチを自動で行う立ち絵オブジェクトを追加します</Description>
         <PackageTags>psd,tachie,lipsync,character,立ち絵,口パク</PackageTags>
         <Version>0.1.6</Version>
         <AssemblyVersion>0.1.6.0</AssemblyVersion>

@@ -71,28 +71,29 @@ public static class PsdLayerState
 
         NormalizeRadios(document.Root, flags);
 
-        if (choices != null)
-        {
-            foreach ((PsdLayer layer, bool visible) in choices)
-            {
-                if (!visible)
-                    flags[layer.Index] = false;
-            }
-
-            foreach ((PsdLayer layer, bool visible) in choices)
-            {
-                if (visible)
-                    SetVisible(flags, layer, true);
-            }
-        }
-
         foreach (PsdLayer layer in document.AllLayers)
         {
             if (layer.IsForced)
                 flags[layer.Index] = true;
         }
 
+        if (choices != null)
+            ApplyChoices(flags, choices);
         return flags;
+    }
+
+    internal static void ApplyChoices(bool[] flags, IReadOnlyDictionary<PsdLayer, bool> choices)
+    {
+        foreach ((PsdLayer layer, bool visible) in choices)
+        {
+            if (!visible && !layer.IsForced)
+                flags[layer.Index] = false;
+        }
+        foreach ((PsdLayer layer, bool visible) in choices)
+        {
+            if (visible)
+                SetVisible(flags, layer, true);
+        }
     }
 
     /// <summary>Sets a layer's flag, hiding its radio siblings when a radio layer is shown.</summary>

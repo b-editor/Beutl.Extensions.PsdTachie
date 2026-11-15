@@ -131,6 +131,33 @@ public class PropertyEditorTests
     }
 
     [AvaloniaTest]
+    public void ZipPresetsUpdateTheLayerTreeAndFollowTheSource()
+    {
+        using var file = new PartArchive();
+        PsdTachieDrawable drawable = CreateDrawable();
+        PsdLayerTreeEditor editor = ShowTree(drawable);
+        var window = (Window)TopLevel.GetTopLevel(editor)!;
+        ComboBox presets = editor.GetVisualDescendants().OfType<ComboBox>().Single(c => c.PlaceholderText == "表情セットを適用");
+        Assert.That(presets.IsVisible, Is.False);
+        drawable.Source.Value = new FileInfo(file.Path);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.That(presets.IsVisible, Is.True);
+        presets.SelectedItem = "表情01";
+        Dispatcher.UIThread.RunJobs();
+        DockPanel eye = LayerRow(editor, "📁 目", "07-1");
+        Assert.That(eye.GetVisualDescendants().OfType<RadioButton>().Single().IsChecked, Is.True);
+        Assert.That(drawable.Layers.Value, Does.Contain("+顔/*02b"));
+        var thumbnail = (Bitmap)eye.GetVisualDescendants().OfType<Image>().Single().Source!;
+        Assert.That(thumbnail.PixelSize, Is.EqualTo(new PixelSize(1, 1)), "The preview shows the eye inside the transparent canvas.");
+        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
+        Dispatcher.UIThread.RunJobs();
+        Assert.That(presets.IsVisible, Is.False);
+        Assert.That(presets.ItemsSource, Is.Null);
+        window.Close();
+    }
+
+    [AvaloniaTest]
     public void ThumbnailsShowLayerPixelsAndCanToggleHiddenLayers()
     {
         static SKColor FirstPixel(Bitmap bitmap)

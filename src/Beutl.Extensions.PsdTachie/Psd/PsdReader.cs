@@ -15,11 +15,6 @@ public static class PsdReader
         "LMsk", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", "Alph", "FMsk", "lnk2", "FEid", "FXid", "PxSD"
     ];
 
-    static PsdReader()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-    }
-
     public static PsdDocument Read(string path)
     {
         return Read(File.ReadAllBytes(path));
@@ -89,9 +84,7 @@ public static class PsdReader
             ? BuildTree(records)
             : BuildFlatDocument(r, ctx, channelCount);
 
-        var all = new List<PsdLayer>();
-        AssignPaths(root, all);
-        return new PsdDocument(width, height, root, all);
+        return new PsdDocument(width, height, root);
     }
 
     private static List<LayerRecord> ReadGlobalLayerBlocks(Reader r, Context ctx, long end)
@@ -186,7 +179,7 @@ public static class PsdReader
 
         int nameLength = r.ReadByte();
         byte[] nameBytes = r.ReadBytes(nameLength);
-        record.Name = DecodeLegacyName(nameBytes);
+        record.Name = JapaneseText.Decode(nameBytes);
         int padded = (1 + nameLength + 3) / 4 * 4;
         r.Skip(padded - 1 - nameLength);
 
@@ -537,53 +530,6 @@ public static class PsdReader
                 // An empty mask that hides everything.
                 layer.Mask = new PsdLayerMask(0, 0, 0, 0, 0, []);
             }
-        }
-    }
-
-    private static void AssignPaths(PsdLayer root, List<PsdLayer> all)
-    {
-        Visit(root, "");
-
-        void Visit(PsdLayer parent, string prefix)
-        {
-            // Number duplicates from the top, the order the layer panel shows them in.
-            var seen = new Dictionary<string, int>(StringComparer.Ordinal);
-            var paths = new string[parent.Children.Count];
-            for (int i = parent.Children.Count - 1; i >= 0; i--)
-            {
-                string escaped = EscapeName(parent.Children[i].Name);
-                int n = seen.TryGetValue(escaped, out int count) ? count + 1 : 1;
-                seen[escaped] = n;
-                paths[i] = prefix + (n == 1 ? escaped : $"{escaped}#{n}");
-            }
-
-            for (int i = 0; i < parent.Children.Count; i++)
-            {
-                PsdLayer child = parent.Children[i];
-                child.Path = paths[i];
-                child.Index = all.Count;
-                all.Add(child);
-                if (child.IsGroup)
-                    Visit(child, child.Path + "/");
-            }
-        }
-    }
-
-    internal static string EscapeName(string name)
-    {
-        return name.Replace("\\", "\\\\").Replace("/", "\\/").Replace("#", "\\#");
-    }
-
-    private static string DecodeLegacyName(byte[] bytes)
-    {
-        try
-        {
-            return new UTF8Encoding(false, true).GetString(bytes);
-        }
-        catch (DecoderFallbackException)
-        {
-            // Japanese Photoshop writes legacy names in Shift_JIS.
-            return Encoding.GetEncoding(932).GetString(bytes);
         }
     }
 

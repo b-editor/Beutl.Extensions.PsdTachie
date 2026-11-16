@@ -96,7 +96,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
         _drawable = _context.Drawable;
         if (_drawable != null)
         {
-            _drawable.Source.ValueChanged += OnSourceChanged;
+            _drawable.Source.Edited += OnSourceChanged;
             foreach ((_, Func<PsdTachieDrawable, IProperty<string>> property) in s_shapes)
                 property(_drawable).ValueChanged += OnShapeChanged;
         }
@@ -110,7 +110,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
         base.OnDetachedFromVisualTree(e);
         if (_drawable != null)
         {
-            _drawable.Source.ValueChanged -= OnSourceChanged;
+            _drawable.Source.Edited -= OnSourceChanged;
             foreach ((_, Func<PsdTachieDrawable, IProperty<string>> property) in s_shapes)
                 property(_drawable).ValueChanged -= OnShapeChanged;
         }
@@ -121,7 +121,7 @@ internal sealed class PsdLayerTreeEditor : UserControl
         ClearNodes();
     }
 
-    private void OnSourceChanged(object? sender, PropertyValueChangedEventArgs<FileInfo?> e)
+    private void OnSourceChanged(object? sender, EventArgs e)
     {
         Dispatcher.UIThread.Post(Reload);
     }

@@ -17,6 +17,7 @@ using Beutl.Editor.Observers;
 using Beutl.Extensibility;
 using Beutl.Extensions.PsdTachie.Editors;
 using Beutl.Extensions.PsdTachie.Graphics;
+using Beutl.Extensions.PsdTachie.Psd;
 using Beutl.ProjectSystem;
 using Beutl.PropertyAdapters;
 using SkiaSharp;
@@ -31,7 +32,7 @@ public class PropertyEditorTests
     private static PsdTachieDrawable CreateDrawable()
     {
         var drawable = new PsdTachieDrawable();
-        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
+        drawable.Source.Value = new TachieFileSource(new Uri(TestData("tachie_rle.psd")));
         return drawable;
     }
 
@@ -59,8 +60,10 @@ public class PropertyEditorTests
             .Select(a => a.GetEngineProperty()!.Name)
             .ToArray();
 
-        // The PSD file itself uses Beutl's own FileInfo editor.
         Assert.That(claimed, Is.EqualTo(new[] { nameof(PsdTachieDrawable.Layers) }));
+        IPropertyAdapter source = adapters.Single(a => a.GetEngineProperty()!.Name == nameof(PsdTachieDrawable.Source));
+        Assert.That(source.GetAttributes().OfType<FileFilterAttribute>().Single().Patterns,
+            Is.EquivalentTo(new[] { "*.psd", "*.psb", "*.zip" }));
     }
 
     [Test]
@@ -139,7 +142,7 @@ public class PropertyEditorTests
         var window = (Window)TopLevel.GetTopLevel(editor)!;
         ComboBox presets = editor.GetVisualDescendants().OfType<ComboBox>().Single(c => c.PlaceholderText == "表情セットを適用");
         Assert.That(presets.IsVisible, Is.False);
-        drawable.Source.Value = new FileInfo(file.Path);
+        drawable.Source.Value = new TachieFileSource(new Uri(file.Path));
         Dispatcher.UIThread.RunJobs();
 
         Assert.That(presets.IsVisible, Is.True);
@@ -150,7 +153,7 @@ public class PropertyEditorTests
         Assert.That(drawable.Layers.Value, Does.Contain("+顔/*02b"));
         var thumbnail = (Bitmap)eye.GetVisualDescendants().OfType<Image>().Single().Source!;
         Assert.That(thumbnail.PixelSize, Is.EqualTo(new PixelSize(1, 1)), "The preview shows the eye inside the transparent canvas.");
-        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
+        drawable.Source.Value = new TachieFileSource(new Uri(TestData("tachie_rle.psd")));
         Dispatcher.UIThread.RunJobs();
         Assert.That(presets.IsVisible, Is.False);
         Assert.That(presets.ItemsSource, Is.Null);
@@ -204,14 +207,14 @@ public class PropertyEditorTests
         var window = (Window)TopLevel.GetTopLevel(editor)!;
         var previous = (Bitmap)FindToggle<CheckBox>(editor, "背景").GetVisualDescendants().OfType<Image>().Single().Source!;
 
-        drawable.Source.Value = new FileInfo(TestData("depth16.psd"));
+        ResourceRelocationService.RelinkFileSource(drawable.Source.Value!, new Uri(TestData("depth16.psd")));
         Dispatcher.UIThread.RunJobs();
         var current = (Bitmap)FindToggle<CheckBox>(editor, "bg").GetVisualDescendants().OfType<Image>().Single().Source!;
         Assert.That(current.PixelSize, Is.EqualTo(new PixelSize(32, 24)));
         Assert.That(() => previous.PixelSize, Throws.TypeOf<ObjectDisposedException>());
 
         // A source-change callback already in the dispatcher must not reload a detached editor.
-        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
+        drawable.Source.Value = new TachieFileSource(new Uri(TestData("tachie_rle.psd")));
         window.Content = null;
         Dispatcher.UIThread.RunJobs();
         Assert.That(editor.GetVisualDescendants().OfType<Image>(), Is.Empty);

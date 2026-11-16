@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Beutl.Extensions.PsdTachie.Graphics;
+using Beutl.Extensions.PsdTachie.Psd;
 using Beutl.Media;
 using Beutl.Media.Source;
 using Beutl.ProjectSystem;
@@ -23,7 +24,7 @@ public class PsdTachieRenderTests
     private static PsdTachieDrawable CreateDrawable()
     {
         var drawable = new PsdTachieDrawable();
-        drawable.Source.Value = new FileInfo(TestData("tachie_rle.psd"));
+        drawable.Source.Value = new TachieFileSource(new Uri(TestData("tachie_rle.psd")));
         drawable.MouthClosed.Value = "口/*閉じ";
         drawable.MouthHalfOpen.Value = "口/*半開き";
         drawable.MouthOpen.Value = "口/*開き";
@@ -175,7 +176,7 @@ public class PsdTachieRenderTests
         var restored = (Element)CoreSerializer.DeserializeFromJsonObject(json, typeof(Element));
 
         var drawable = (PsdTachieDrawable)restored.Objects.Single();
-        Assert.That(drawable.Source.Value!.FullName, Is.EqualTo(Path.GetFullPath(TestData("tachie_rle.psd"))));
+        Assert.That(drawable.Source.Value!.Uri.LocalPath, Is.EqualTo(Path.GetFullPath(TestData("tachie_rle.psd"))));
         Assert.That(drawable.MouthOpen.Value, Is.EqualTo("口/*開き"));
         Assert.That(drawable.BlinkInterval.Value, Is.EqualTo(1f));
     }

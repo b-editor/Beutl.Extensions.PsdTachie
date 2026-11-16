@@ -26,7 +26,8 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
     }
 
     [Display(Name = "立ち絵ファイル", Description = "PSD・PSBファイル、またはパーツ別のPNGを収めたZIPファイル")]
-    public IExpressionProperty<FileInfo?> Source { get; } = Property.CreateExpression<FileInfo?>();
+    [FileFilter("立ち絵ファイル", "*.psd", "*.psb", "*.zip")]
+    public IExpressionProperty<TachieFileSource?> Source { get; } = Property.CreateExpression<TachieFileSource?>();
 
     [PsdLayerState]
     [Display(Name = "レイヤー")]
@@ -177,7 +178,7 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
         private void UpdateDocument()
         {
             // Reload when another file is chosen or the file changes on disk.
-            string? path = Source?.FullName;
+            string? path = Source?.LocalPath;
             DateTime writeTime = path != null ? GetWriteTime(path) : default;
             if (path == _loadedPath && writeTime == _loadedWriteTime)
                 return;

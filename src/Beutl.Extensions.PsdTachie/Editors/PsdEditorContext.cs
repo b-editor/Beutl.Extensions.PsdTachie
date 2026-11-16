@@ -68,13 +68,13 @@ internal static class PsdEditorHelper
     public static LoadedPsd? TryLoad(PsdTachieDrawable? drawable, out string? error)
     {
         error = null;
-        FileInfo? file = drawable?.Source.Value;
-        if (file == null)
+        string? path = drawable?.Source.Value?.LocalPath;
+        if (path == null)
             return null;
 
         try
         {
-            return PsdDocumentCache.Load(file.FullName);
+            return PsdDocumentCache.Load(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
                                        or NotSupportedException or OverflowException)

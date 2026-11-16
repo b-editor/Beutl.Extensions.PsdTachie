@@ -97,7 +97,7 @@ public class TachieZipTests
     {
         using var file = new PartArchive();
         var drawable = new PsdTachieDrawable();
-        drawable.Source.Value = new FileInfo(file.Path);
+        drawable.Source.Value = new TachieFileSource(new Uri(file.Path));
         drawable.Layers.Value = "-目/*00\n+目/*07-1";
         drawable.BlinkInterval.Value = 1f;
         drawable.BlinkRandomness.Value = 0f;

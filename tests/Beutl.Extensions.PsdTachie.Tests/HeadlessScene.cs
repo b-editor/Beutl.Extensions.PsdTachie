@@ -1,4 +1,5 @@
 using Beutl.Composition;
+using Beutl.Configuration;
 using Beutl.Editor;
 using Beutl.Editor.Services;
 using Beutl.Engine;
@@ -42,7 +43,8 @@ internal static class HeadlessScene
         EnsureAvailable();
         return RenderThread.Dispatcher.Invoke(() =>
         {
-            using var renderer = new SceneRenderer(scene, RenderIntent.Delivery);
+            // The scenes hold no text, so they need no FontManager.
+            using var renderer = new SceneRenderer(scene, fonts: null, RenderIntent.Delivery);
             CompositionFrame frame = renderer.Compositor.EvaluateGraphics(time);
             renderer.Render(frame);
             using Bitmap snapshot = renderer.Snapshot();
@@ -74,7 +76,7 @@ internal static class HeadlessScene
         scene.Uri = new Uri(Path.Combine(directory, "split.scene"));
         using var history = new HistoryManager(new OperationSequenceGenerator());
         var existing = scene.Children.ToHashSet();
-        new ElementStructureService(history).Split(scene, [element], at);
+        new ElementStructureService(history, new EditorConfig()).Split(scene, [element], at);
         return scene.Children.Single(child => !existing.Contains(child));
     }
 

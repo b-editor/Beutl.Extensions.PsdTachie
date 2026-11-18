@@ -60,7 +60,7 @@ PSDToolKitなどで使われている命名規約に従います。
 
 ## 開発
 
-`Beutl.Extensibility.Sdk` 2.0.0-preview.13 と .NET 11 SDK でビルドします。
+`Beutl.Extensibility.Sdk` 2.0.0-preview.14 と .NET 11 SDK でビルドします。
 
 ```bash
 dotnet build src/Beutl.Extensions.PsdTachie

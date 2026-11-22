@@ -43,8 +43,8 @@ internal static class HeadlessScene
         EnsureAvailable();
         return RenderThread.Dispatcher.Invoke(() =>
         {
-            // The scenes hold no text, so they need no FontManager.
-            using var renderer = new SceneRenderer(scene, fonts: null, RenderIntent.Delivery);
+            // The scenes hold no text, so they need no FontManager. Their audio opens through the test decoder.
+            using var renderer = new SceneRenderer(scene, fonts: null, RenderIntent.Delivery, decoders: TestWaveDecoder.Registry);
             CompositionFrame frame = renderer.Compositor.EvaluateGraphics(time);
             renderer.Render(frame);
             using Bitmap snapshot = renderer.Snapshot();
@@ -76,7 +76,7 @@ internal static class HeadlessScene
         scene.Uri = new Uri(Path.Combine(directory, "split.scene"));
         using var history = new HistoryManager(new OperationSequenceGenerator());
         var existing = scene.Children.ToHashSet();
-        new ElementStructureService(history, new EditorConfig()).Split(scene, [element], at);
+        new ElementStructureService(history, new EditorConfig(), TestWaveDecoder.Registry).Split(scene, [element], at);
         return scene.Children.Single(child => !existing.Contains(child));
     }
 

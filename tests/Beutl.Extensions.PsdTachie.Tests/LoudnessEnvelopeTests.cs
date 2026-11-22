@@ -14,13 +14,12 @@ public class LoudnessEnvelopeTests
     [TestCase(48000, 2)]
     public void KeepsChannelLevelsHoldAndRandomAccess(int rate, int channels)
     {
-        TestWaveDecoder.EnsureRegistered();
         string path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"levels-{rate}-{channels}.wav");
         TestWaveDecoder.Write(path, rate, Enumerable.Range(0, rate * 2 + rate / 50)
             .SelectMany(i => Enumerable.Range(0, channels).Select(c => i < rate && c == 0 ? 0.5f : 0f)), channels);
         var source = new SoundSource();
         source.ReadFrom(new Uri(path));
-        using SoundSource.Resource resource = source.ToResource(CompositionContext.Default);
+        using SoundSource.Resource resource = source.ToResource(new CompositionContext(MediaTime.Zero) { Decoders = TestWaveDecoder.Registry });
         var envelope = new LoudnessEnvelope(resource);
         MediaTime hold = MediaTime.FromSeconds(0.04);
         double expected = LipSync.ToDecibels(0.5 / Math.Sqrt(channels));
@@ -45,7 +44,6 @@ public class LoudnessEnvelopeTests
     [TestCase(8, 6, SurroundGain, 0.0)] // 7.1 side left
     public void MeasuresASurroundSourceAsItsStereoFold(int channels, int active, double left, double right)
     {
-        TestWaveDecoder.EnsureRegistered();
         const int rate = 48000;
         const double amplitude = 0.5;
         string path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"surround-{channels}-{active}.wav");
@@ -53,7 +51,7 @@ public class LoudnessEnvelopeTests
             .SelectMany(_ => Enumerable.Range(0, channels).Select(c => c == active ? (float)amplitude : 0f)), channels);
         var source = new SoundSource();
         source.ReadFrom(new Uri(path));
-        using SoundSource.Resource resource = source.ToResource(CompositionContext.Default);
+        using SoundSource.Resource resource = source.ToResource(new CompositionContext(MediaTime.Zero) { Decoders = TestWaveDecoder.Registry });
         var envelope = new LoudnessEnvelope(resource);
 
         MediaTime hold = MediaTime.FromSeconds(0.04);

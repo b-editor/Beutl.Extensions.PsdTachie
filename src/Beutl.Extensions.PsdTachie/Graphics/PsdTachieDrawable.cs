@@ -6,6 +6,7 @@ using Beutl.Extensions.PsdTachie.Psd;
 using Beutl.Graphics;
 using Beutl.Graphics.Rendering;
 using Beutl.Media;
+using Beutl.Media.Decoding;
 using Beutl.Media.Source;
 
 namespace Beutl.Extensions.PsdTachie.Graphics;
@@ -85,9 +86,12 @@ public sealed partial class PsdTachieDrawable : Drawable, IOriginalDurationProvi
         return LipSyncAudio.Value != null;
     }
 
-    public bool TryGetOriginalDuration(out MediaTime timeSpan)
+    public bool TryGetOriginalDuration(out MediaTime timeSpan, DecoderRegistry? decoders = null)
     {
-        using SoundSource.Resource? audio = LipSyncAudio.Value?.ToResource(CompositionContext.Default);
+        // Only the host's decoders can open the audio. Without them its length is unknown, as for an unreadable file.
+        using SoundSource.Resource? audio = decoders != null
+            ? LipSyncAudio.Value?.ToResource(new CompositionContext(MediaTime.Zero) { Decoders = decoders })
+            : null;
         timeSpan = audio != null ? LipSyncOffset.Value + audio.Duration : MediaTime.Zero;
         return audio is { Duration.Flicks: > 0 } && timeSpan > MediaTime.Zero;
     }

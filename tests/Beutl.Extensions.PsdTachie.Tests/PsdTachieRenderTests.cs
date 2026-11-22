@@ -77,7 +77,6 @@ public class PsdTachieRenderTests
     [Test]
     public void MouthFollowsTheAudioLevel()
     {
-        TestWaveDecoder.EnsureRegistered();
         string wav = Path.Combine(TestContext.CurrentContext.WorkDirectory, "lipsync.wav");
         const int rate = 44100;
         // One loud second, then one silent second.
@@ -107,7 +106,6 @@ public class PsdTachieRenderTests
     [Test]
     public void ASurroundVoiceMovesTheMouthLikeItsStereoFold()
     {
-        TestWaveDecoder.EnsureRegistered();
         const int rate = 44100;
         const float centreGain = 0.70710677f;
         // One second of voice, then one silent second. Its stereo fold passes "開く音量" (-22 dB against -24 dB);
@@ -184,7 +182,6 @@ public class PsdTachieRenderTests
     [Test]
     public void TheBackHalfOfASplitKeepsTheMouthOnTheVoice()
     {
-        TestWaveDecoder.EnsureRegistered();
         string wav = Path.Combine(TestContext.CurrentContext.WorkDirectory, "lipsync-split.wav");
         const int rate = 44100;
         // One loud second, then one silent second.
@@ -210,7 +207,7 @@ public class PsdTachieRenderTests
 
         var backDrawable = back.Objects.OfType<PsdTachieDrawable>().Single();
         Assert.That(backDrawable.LipSyncOffset.Value, Is.EqualTo(MediaTime.FromSeconds(-0.5)));
-        Assert.That(backDrawable.TryGetOriginalDuration(out MediaTime backDuration), Is.True);
+        Assert.That(backDrawable.TryGetOriginalDuration(out MediaTime backDuration, TestWaveDecoder.Registry), Is.True);
         Assert.That(backDuration, Is.EqualTo(MediaTime.FromSeconds(1.5)), "The rest of the voice.");
 
         // Still speaking, then silent: the back half must not start the voice over.

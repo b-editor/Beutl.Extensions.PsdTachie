@@ -9,7 +9,6 @@ public class OriginalDurationTests
 {
     private static SoundSource WriteSilence(double seconds)
     {
-        TestWaveDecoder.EnsureRegistered();
         string path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"voice-{Guid.NewGuid():N}.wav");
         TestWaveDecoder.Write(path, 44100, Enumerable.Repeat(0f, (int)(44100 * seconds)));
         var source = new SoundSource();
@@ -27,7 +26,7 @@ public class OriginalDurationTests
         element.AddObject(drawable);
 
         Assert.That(element.HasOriginalDuration(), Is.True);
-        Assert.That(element.TryGetOriginalDuration(out MediaTime duration), Is.True);
+        Assert.That(element.TryGetOriginalDuration(out MediaTime duration, TestWaveDecoder.Registry), Is.True);
         Assert.That(duration, Is.EqualTo(MediaTime.FromSeconds(2.5)));
     }
 
@@ -37,6 +36,17 @@ public class OriginalDurationTests
         var drawable = new PsdTachieDrawable();
 
         Assert.That(drawable.HasOriginalDuration(), Is.False);
-        Assert.That(drawable.TryGetOriginalDuration(out _), Is.False);
+        Assert.That(drawable.TryGetOriginalDuration(out _, TestWaveDecoder.Registry), Is.False);
+    }
+
+    [Test]
+    public void ReportsNoDurationWithoutDecoders()
+    {
+        var drawable = new PsdTachieDrawable();
+        drawable.LipSyncAudio.Value = WriteSilence(2);
+
+        // Beutl's sound source refuses to open a file without a decoder registry; the query must not throw.
+        Assert.That(drawable.TryGetOriginalDuration(out MediaTime duration), Is.False);
+        Assert.That(duration, Is.EqualTo(MediaTime.Zero));
     }
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Beutl.Audio;
+using Beutl.Configuration;
 using Beutl.Media;
 using Beutl.Media.Decoding;
 using Beutl.Media.Source;
@@ -15,14 +16,16 @@ internal sealed class TestWaveDecoder : IDecoderInfo
 {
     public static readonly TestWaveDecoder Instance = new();
 
-    private static int s_registered;
+    // Stands in for the host's registry, which Beutl passes to renderers and to original-duration queries.
+    public static DecoderRegistry Registry { get; } = CreateRegistry();
 
     public string Name => "Test WAV decoder";
 
-    public static void EnsureRegistered()
+    private static DecoderRegistry CreateRegistry()
     {
-        if (Interlocked.Exchange(ref s_registered, 1) == 0)
-            DecoderRegistry.Register(Instance);
+        var registry = new DecoderRegistry(new ExtensionConfig());
+        registry.Register(Instance);
+        return registry;
     }
 
     public MediaReader? Open(string file, MediaOptions options) => new Reader(file);

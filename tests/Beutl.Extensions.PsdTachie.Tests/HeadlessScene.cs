@@ -44,7 +44,7 @@ internal static class HeadlessScene
         return RenderThread.Dispatcher.Invoke(() =>
         {
             // The scenes hold no text, so they need no FontManager. Their audio opens through the test decoder.
-            using var renderer = new SceneRenderer(scene, fonts: null, RenderIntent.Delivery, decoders: TestWaveDecoder.Registry);
+            using var renderer = new SceneRenderer(scene, new SceneRenderServices(Decoders: TestWaveDecoder.Registry), RenderIntent.Delivery);
             CompositionFrame frame = renderer.Compositor.EvaluateGraphics(time);
             renderer.Render(frame);
             using Bitmap snapshot = renderer.Snapshot();
